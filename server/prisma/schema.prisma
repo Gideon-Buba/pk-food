@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STAFF
+  ADMIN
+  RUNNER
+}
+
+enum ItemStatus {
+  AVAILABLE
+  UNAVAILABLE
+  OUT_OF_STOCK
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+enum AnnouncementType {
+  STATUS
+  GENERAL
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  role         Role     @default(STAFF)
+  floor        String?
+  officeNumber String?
+  orders       Order[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("users")
+}
+
+model MagicLink {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@map("magic_links")
+}
+
+model Vendor {
+  id        String     @id @default(cuid())
+  name      String
+  items     MenuItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@map("vendors")
+}
+
+model MenuItem {
+  id          String      @id @default(cuid())
+  name        String
+  price       Decimal     @db.Decimal(10, 2)
+  image       String?
+  vendorId    String
+  vendor      Vendor      @relation(fields: [vendorId], references: [id])
+  totalStock  Int         @default(0)
+  onlineStock Int         @default(0)
+  status      ItemStatus  @default(AVAILABLE)
+  orderItems  OrderItem[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@map("menu_items")
+}
+
+model Order {
+  id           String      @id @default(cuid())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id])
+  items        OrderItem[]
+  deliveryFee  Decimal     @db.Decimal(10, 2)
+  status       OrderStatus @default(PENDING)
+  floor        String
+  officeNumber String
+  paystackRef  String?
+  paid         Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id])
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  quantity   Int
+  unitPrice  Decimal  @db.Decimal(10, 2)
+
+  @@map("order_items")
+}
+
+model Announcement {
+  id        String           @id @default(cuid())
+  type      AnnouncementType
+  message   String
+  active    Boolean          @default(true)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("announcements")
+}
