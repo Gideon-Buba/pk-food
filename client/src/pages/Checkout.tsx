@@ -1,135 +1,117 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { jwtDecode } from 'jwt-decode';
-import { api, getToken } from '../api/client';
+import { ChevronLeft, CreditCard, MapPin } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { api } from '../api/client';
 import { useCartStore } from '../store/cart';
-import type { ApiResponse, JwtPayload, Order } from '../types';
+import type { ApiResponse, Order } from '../types';
 
 const DELIVERY_FEE = Number(import.meta.env.VITE_DELIVERY_FEE ?? 300);
 
-interface PaystackInitData {
-  authorization_url: string;
-  reference: string;
-}
+interface PaystackInitData { authorization_url: string; reference: string; }
 
 export default function Checkout() {
   const navigate = useNavigate();
   const { items, itemsTotal, clearCart } = useCartStore();
-  const token = getToken();
-  const userPayload = token ? jwtDecode<JwtPayload>(token) : null;
-
   const [floor, setFloor] = useState('');
   const [officeNumber, setOfficeNumber] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
-  if (items.length === 0) {
-    navigate('/cart');
-    return null;
-  }
-
-  const handleCheckout = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!userPayload) { navigate('/login'); return; }
-    setLoading(true);
-    setError('');
-
-    try {
-      const orderRes = await api.post<ApiResponse<Order>>('/orders', {
-        items: items.map(({ menuItem, quantity }) => ({ menuItemId: menuItem.id, quantity })),
-        floor,
-        officeNumber,
-      });
-
-      const orderId = orderRes.data.data.id;
-
-      const payRes = await api.post<ApiResponse<PaystackInitData>>('/payments/initialize', { orderId });
-
-      clearCart();
-      window.location.href = payRes.data.data.authorization_url;
-    } catch (err: unknown) {
-      const e = err as { response?: { data?: { message?: string } } };
-      setError(e.response?.data?.message ?? 'Something went wrong. Please try again.');
-      setLoading(false);
-    }
-  };
+  if (items.length === 0) { navigate('/cart'); return null; }
 
   const subtotal = itemsTotal();
   const total = subtotal + DELIVERY_FEE;
 
+  const handleCheckout = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const orderRes = await api.post<ApiResponse<Order>>('/orders', {
+        items: items.map(({ menuItem, quantity }) => ({ menuItemId: menuItem.id, quantity })),
+        floor, officeNumber,
+      });
+      const orderId = orderRes.data.data.id;
+      const payRes = await api.post<ApiResponse<PaystackInitData>>('/payments/initialize', { orderId });
+      clearCart();
+      window.location.href = payRes.data.data.authorization_url;
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast.error(e.response?.data?.message ?? 'Something went wrong. Please try again.');
+      setLoading(false);
+    }
+  };
+
   return (
-    <div style={s.root}>
-      <header style={s.header}>
-        <button style={s.back} onClick={() => navigate('/cart')}>← Cart</button>
-        <h1 style={s.title}>Checkout</h1>
-        <span />
+    <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
+      <header className="nav-header">
+        <div className="nav-inner">
+          <button className="btn btn-ghost btn-icon-sm" onClick={() => navigate('/cart')}><ChevronLeft size={20} /></button>
+          <span style={{ fontWeight: 700, fontSize: 16 }}>Checkout</span>
+        </div>
       </header>
 
-      <main style={s.main}>
-        <div style={s.left}>
-          <h2 style={s.sectionTitle}>Delivery details</h2>
-          <form onSubmit={handleCheckout} style={s.form}>
-            <label style={s.label}>
-              Floor / Level
-              <input
-                style={s.input}
-                value={floor}
-                onChange={(e) => setFloor(e.target.value)}
-                placeholder="e.g. 3rd Floor"
-                required
-              />
-            </label>
-            <label style={s.label}>
-              Office / Room number
-              <input
-                style={s.input}
-                value={officeNumber}
-                onChange={(e) => setOfficeNumber(e.target.value)}
-                placeholder="e.g. Room 305"
-                required
-              />
-            </label>
-            {error && <p style={s.error}>{error}</p>}
-            <button type="submit" disabled={loading} style={s.payBtn}>
-              {loading ? 'Processing…' : `Pay ₦${total.toLocaleString()} with Paystack`}
-            </button>
-          </form>
-        </div>
-
-        <div style={s.right}>
-          <h2 style={s.sectionTitle}>Order summary</h2>
-          {items.map(({ menuItem, quantity }) => (
-            <div key={menuItem.id} style={s.item}>
-              <span>{menuItem.name} × {quantity}</span>
-              <span>₦{(Number(menuItem.price) * quantity).toLocaleString()}</span>
+      <div className="page-wrap" style={{ maxWidth: 840 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
+          {/* Delivery form */}
+          <div className="card" style={{ padding: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-md)', background: 'var(--primary-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <MapPin size={18} color="var(--primary)" />
+              </div>
+              <h2 style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em' }}>Delivery details</h2>
             </div>
-          ))}
-          <hr style={s.hr} />
-          <div style={s.item}><span>Subtotal</span><span>₦{subtotal.toLocaleString()}</span></div>
-          <div style={s.item}><span>Delivery</span><span>₦{DELIVERY_FEE.toLocaleString()}</span></div>
-          <div style={{ ...s.item, fontWeight: 700, fontSize: 18, marginTop: 8 }}>
-            <span>Total</span><span>₦{total.toLocaleString()}</span>
+            <form onSubmit={handleCheckout} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div className="form-group">
+                <label className="label" htmlFor="floor">Floor / Level</label>
+                <input id="floor" className="input" placeholder="e.g. 3rd Floor" value={floor} onChange={e => setFloor(e.target.value)} required />
+              </div>
+              <div className="form-group">
+                <label className="label" htmlFor="office">Wing</label>
+                <select id="office" className="input" value={officeNumber} onChange={e => setOfficeNumber(e.target.value)} required>
+                  <option value="">Select wing</option>
+                  <option value="A">Wing A</option>
+                  <option value="B">Wing B</option>
+                  <option value="C">Wing C</option>
+                </select>
+              </div>
+              <button type="submit" disabled={loading} className="btn btn-primary btn-lg btn-full" style={{ marginTop: 4 }}>
+                {loading ? <span className="spinner" /> : <CreditCard size={17} />}
+                {loading ? 'Processing…' : `Pay ₦${total.toLocaleString()} with Paystack`}
+              </button>
+            </form>
+          </div>
+
+          {/* Summary */}
+          <div className="card" style={{ padding: 20 }}>
+            <h3 className="section-title" style={{ marginBottom: 16 }}>Order summary</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+              {items.map(ci => (
+                <div key={ci.menuItem.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, gap: 8 }}>
+                  <span style={{ color: 'var(--gray-600)', flex: 1 }}>{ci.menuItem.name} <span style={{ color: 'var(--gray-400)' }}>×{ci.quantity}</span></span>
+                  <span style={{ fontWeight: 600, flexShrink: 0 }}>₦{(Number(ci.menuItem.price) * ci.quantity).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+            <hr className="divider" style={{ marginBottom: 12 }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--gray-500)', marginBottom: 6 }}>
+              <span>Subtotal</span><span>₦{subtotal.toLocaleString()}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--gray-500)', marginBottom: 12 }}>
+              <span>Delivery</span><span>₦{DELIVERY_FEE.toLocaleString()}</span>
+            </div>
+            <hr className="divider" style={{ marginBottom: 12 }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 16, letterSpacing: '-0.02em' }}>
+              <span>Total</span><span style={{ color: 'var(--primary)' }}>₦{total.toLocaleString()}</span>
+            </div>
           </div>
         </div>
-      </main>
+
+        <style>{`
+          @media (max-width: 680px) {
+            .checkout-grid { grid-template-columns: 1fr !important; }
+          }
+        `}</style>
+      </div>
     </div>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  root: { minHeight: '100vh', background: '#f9fafb', fontFamily: 'system-ui, sans-serif' },
-  header: { background: '#15803d', color: '#fff', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 },
-  back: { background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 15 },
-  title: { fontSize: 20, fontWeight: 700, margin: 0 },
-  main: { maxWidth: 840, margin: '24px auto', padding: '0 16px', display: 'flex', gap: 24, flexWrap: 'wrap' },
-  left: { flex: '1 1 340px', background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 6px rgba(0,0,0,.06)' },
-  right: { flex: '1 1 280px', background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 6px rgba(0,0,0,.06)' },
-  sectionTitle: { margin: '0 0 20px', fontSize: 18, fontWeight: 700 },
-  form: { display: 'flex', flexDirection: 'column', gap: 16 },
-  label: { display: 'flex', flexDirection: 'column', gap: 6, fontSize: 14, fontWeight: 500, color: '#374151' },
-  input: { padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 15, outline: 'none' },
-  payBtn: { padding: '14px 0', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 700, cursor: 'pointer' },
-  error: { color: '#dc2626', fontSize: 14, margin: 0 },
-  item: { display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: 15 },
-  hr: { border: 'none', borderTop: '1px solid #e5e7eb', margin: '12px 0' },
-};

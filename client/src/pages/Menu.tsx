@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
+import { ShoppingCart, LogOut, Settings, Bike, Search, Plus, Minus, X, ClipboardList } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { api, clearToken, getToken } from '../api/client';
 import { useCartStore } from '../store/cart';
 import type { ApiResponse, Announcement, JwtPayload, MenuItem } from '../types';
@@ -9,124 +11,251 @@ export default function Menu() {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const { addItem, itemCount } = useCartStore();
+  const [search, setSearch] = useState('');
+  const [activeVendor, setActiveVendor] = useState<string>('all');
   const navigate = useNavigate();
+  const { items: cartItems, addItem, updateQuantity, itemCount } = useCartStore();
 
   const token = getToken();
   const userRole = token ? jwtDecode<JwtPayload>(token).role : 'STAFF';
+  const userEmail = token ? jwtDecode<JwtPayload>(token).email : '';
 
   useEffect(() => {
     Promise.all([
       api.get<ApiResponse<MenuItem[]>>('/menu/items'),
       api.get<ApiResponse<Announcement[]>>('/menu/announcements'),
     ])
-      .then(([itemsRes, announcementsRes]) => {
-        setItems(itemsRes.data.data);
-        setAnnouncements(announcementsRes.data.data);
+      .then(([ir, ar]) => {
+        setItems(ir.data.data);
+        setAnnouncements(ar.data.data);
       })
-      .catch(() => setError('Failed to load menu.'))
+      .catch(() => toast.error('Failed to load menu'))
       .finally(() => setLoading(false));
   }, []);
 
-  const handleLogout = () => {
-    clearToken();
-    navigate('/login');
+  const vendors = ['all', ...Array.from(new Set(items.map(i => i.vendor.name)))];
+
+  const filtered = items.filter(item => {
+    const matchVendor = activeVendor === 'all' || item.vendor.name === activeVendor;
+    const matchSearch = item.name.toLowerCase().includes(search.toLowerCase());
+    return matchVendor && matchSearch;
+  });
+
+  const getCartItem = (id: string) => cartItems.find(i => i.menuItem.id === id);
+
+  const handleAdd = (item: MenuItem) => {
+    addItem(item);
+    toast.success(`${item.name} added to cart`, { id: item.id });
   };
 
-  if (loading) return <div style={s.center}>Loading menu…</div>;
-  if (error) return <div style={s.center}>{error}</div>;
+  const count = itemCount();
 
-  const grouped = items.reduce<Record<string, MenuItem[]>>((acc, item) => {
-    const key = item.vendor.name;
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(item);
-    return acc;
-  }, {});
+  // suppress unused variable warning for userEmail
+  void userEmail;
 
   return (
-    <div style={s.root}>
-      <header style={s.header}>
-        <span style={s.logo}>🍽️ PK Food</span>
-        <nav style={s.nav}>
-          {userRole === 'ADMIN' && (
-            <button style={s.navBtn} onClick={() => navigate('/admin')}>Admin</button>
-          )}
-          {(userRole === 'RUNNER' || userRole === 'ADMIN') && (
-            <button style={s.navBtn} onClick={() => navigate('/runner')}>Runner</button>
-          )}
-          <button style={s.navBtn} onClick={() => navigate('/orders')}>My Orders</button>
-          <button style={{ ...s.navBtn, position: 'relative' }} onClick={() => navigate('/cart')}>
-            Cart {itemCount() > 0 && <span style={s.badge}>{itemCount()}</span>}
-          </button>
-          <button style={{ ...s.navBtn, color: '#dc2626' }} onClick={handleLogout}>Logout</button>
-        </nav>
+    <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
+      {/* Header */}
+      <header className="nav-header">
+        <div className="nav-inner">
+          <span style={{ fontWeight: 800, fontSize: 18, color: 'var(--primary)', letterSpacing: '-0.03em', flexShrink: 0 }}>
+            PK Food
+          </span>
+
+          {/* Search */}
+          <div className="search-wrap" style={{ flex: 1 }}>
+            <Search size={15} className="search-icon" />
+            <input
+              className="input"
+              style={{ paddingLeft: 36, fontSize: 13 }}
+              placeholder="Search menu…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+            {search && (
+              <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray-400)', display: 'flex' }}>
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            {userRole === 'STAFF' && (
+              <button className="btn btn-ghost btn-icon" onClick={() => navigate('/orders')} title="My orders">
+                <ClipboardList size={18} />
+              </button>
+            )}
+            {userRole === 'ADMIN' && (
+              <>
+                <button className="btn btn-ghost btn-icon" onClick={() => navigate('/admin')} title="Admin dashboard">
+                  <Settings size={18} />
+                </button>
+                <button className="btn btn-ghost btn-icon" onClick={() => navigate('/runner')} title="Delivery queue">
+                  <Bike size={18} />
+                </button>
+              </>
+            )}
+            {userRole === 'RUNNER' && (
+              <button className="btn btn-ghost btn-icon" onClick={() => navigate('/runner')} title="Delivery queue">
+                <Bike size={18} />
+              </button>
+            )}
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => navigate('/cart')}
+              style={{ position: 'relative', paddingRight: count > 0 ? 14 : undefined }}
+            >
+              <ShoppingCart size={15} />
+              Cart
+              {count > 0 && (
+                <span className="cart-badge">{count > 9 ? '9+' : count}</span>
+              )}
+            </button>
+            <button className="btn btn-ghost btn-icon" onClick={() => { clearToken(); navigate('/login'); }} title="Sign out">
+              <LogOut size={17} />
+            </button>
+          </div>
+        </div>
       </header>
 
-      <main style={s.main}>
-        {announcements.map((a) => (
-          <div key={a.id} style={{ ...s.banner, background: a.type === 'STATUS' ? '#fef3c7' : '#dbeafe' }}>
-            {a.message}
+      <div className="page-wrap">
+        {/* Announcements */}
+        {announcements.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+            {announcements.map(a => (
+              <div key={a.id} className={`announcement announcement-${a.type.toLowerCase()}`}>
+                <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'currentColor', flexShrink: 0 }} />
+                {a.message}
+              </div>
+            ))}
           </div>
-        ))}
+        )}
 
-        {Object.entries(grouped).map(([vendor, vendorItems]) => (
-          <section key={vendor} style={s.section}>
-            <h2 style={s.vendorTitle}>{vendor}</h2>
-            <div style={s.grid}>
-              {vendorItems.map((item) => (
-                <div key={item.id} style={s.card}>
-                  {item.image && (
-                    <img src={item.image} alt={item.name} style={s.img} />
-                  )}
-                  <div style={s.cardBody}>
-                    <h3 style={s.itemName}>{item.name}</h3>
-                    <p style={s.price}>₦{Number(item.price).toLocaleString()}</p>
-                    <p style={{ ...s.stockLabel, color: item.status === 'AVAILABLE' ? '#16a34a' : '#dc2626' }}>
-                      {item.status === 'AVAILABLE' ? `${item.onlineStock} left` : item.status.replace('_', ' ')}
+        {/* Vendor filter */}
+        <div className="vendor-tabs" style={{ marginBottom: 20 }}>
+          {vendors.map(v => (
+            <button
+              key={v}
+              className={`vendor-tab ${activeVendor === v ? 'active' : ''}`}
+              onClick={() => setActiveVendor(v)}
+            >
+              {v === 'all' ? 'All items' : v}
+            </button>
+          ))}
+        </div>
+
+        {/* Grid */}
+        {loading ? (
+          <div className="food-grid">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="card" style={{ overflow: 'hidden' }}>
+                <div className="skeleton" style={{ height: 160 }} />
+                <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div className="skeleton" style={{ height: 12, width: '60%' }} />
+                  <div className="skeleton" style={{ height: 16, width: '80%' }} />
+                  <div className="skeleton" style={{ height: 32, marginTop: 8 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="empty-state">
+            <Search className="empty-state-icon" />
+            <h3>No items found</h3>
+            <p>{search ? `No results for "${search}"` : 'No items available right now'}</p>
+            {search && <button className="btn btn-secondary btn-sm" onClick={() => setSearch('')}>Clear search</button>}
+          </div>
+        ) : (
+          <div className="food-grid">
+            {filtered.map((item, i) => {
+              const cartItem = getCartItem(item.id);
+              const available = item.status === 'AVAILABLE';
+              return (
+                <div key={item.id} className="card card-hover fade-up" style={{ overflow: 'hidden', animationDelay: `${i * 30}ms` }}>
+                  <div style={{ position: 'relative', aspectRatio: '16/10', background: 'var(--gray-100)' }}>
+                    {item.image ? (
+                      <img
+                        src={item.image}
+                        alt={item.name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      />
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <ShoppingCart size={32} color="var(--gray-300)" />
+                      </div>
+                    )}
+                    {!available && (
+                      <div style={{
+                        position: 'absolute', inset: 0, background: 'rgba(0,0,0,.45)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <span className="badge badge-gray" style={{ fontSize: 12 }}>
+                          {item.status === 'OUT_OF_STOCK' ? 'Sold out' : 'Unavailable'}
+                        </span>
+                      </div>
+                    )}
+                    {cartItem && (
+                      <div style={{
+                        position: 'absolute', top: 8, right: 8,
+                        background: 'var(--primary)', color: '#fff',
+                        borderRadius: 'var(--radius-full)', padding: '2px 9px',
+                        fontSize: 11, fontWeight: 700,
+                      }}>
+                        {cartItem.quantity} in cart
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ padding: '12px 14px 14px' }}>
+                    <p style={{ fontSize: 11, color: 'var(--gray-400)', fontWeight: 500, marginBottom: 3 }}>
+                      {item.vendor.name}
                     </p>
-                    <button
-                      style={{ ...s.addBtn, opacity: item.status === 'AVAILABLE' ? 1 : 0.4 }}
-                      disabled={item.status !== 'AVAILABLE'}
-                      onClick={() => addItem(item)}
-                    >
-                      Add to cart
-                    </button>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-900)', marginBottom: 10, lineHeight: 1.3 }}>
+                      {item.name}
+                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                      <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--primary)', letterSpacing: '-0.02em' }}>
+                        ₦{Number(item.price).toLocaleString()}
+                      </span>
+                      {cartItem ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <button
+                            className="qty-btn"
+                            onClick={() => updateQuantity(item.id, cartItem.quantity - 1)}
+                            style={{ width: 26, height: 26 }}
+                          >
+                            <Minus size={12} />
+                          </button>
+                          <span style={{ fontSize: 14, fontWeight: 700, minWidth: 20, textAlign: 'center' }}>
+                            {cartItem.quantity}
+                          </span>
+                          <button
+                            className="qty-btn"
+                            onClick={() => updateQuantity(item.id, cartItem.quantity + 1)}
+                            style={{ width: 26, height: 26 }}
+                          >
+                            <Plus size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          className="btn btn-primary btn-sm"
+                          disabled={!available}
+                          onClick={() => handleAdd(item)}
+                          style={{ padding: '6px 12px' }}
+                        >
+                          <Plus size={13} />
+                          Add
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </section>
-        ))}
-
-        {items.length === 0 && (
-          <p style={{ textAlign: 'center', color: '#6b7280', marginTop: 64 }}>
-            No items available right now.
-          </p>
+              );
+            })}
+          </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  root: { minHeight: '100vh', background: '#f9fafb', fontFamily: 'system-ui, sans-serif' },
-  header: { background: '#15803d', color: '#fff', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 },
-  logo: { fontWeight: 700, fontSize: 20 },
-  nav: { display: 'flex', gap: 8 },
-  navBtn: { background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontSize: 14, fontWeight: 500, position: 'relative' },
-  badge: { position: 'absolute', top: -6, right: -6, background: '#dc2626', color: '#fff', borderRadius: '50%', width: 18, height: 18, fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  main: { maxWidth: 960, margin: '0 auto', padding: 24 },
-  banner: { padding: '12px 16px', borderRadius: 8, marginBottom: 16, fontSize: 14 },
-  section: { marginBottom: 32 },
-  vendorTitle: { fontSize: 18, fontWeight: 700, color: '#15803d', marginBottom: 16 },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 },
-  card: { background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 8px rgba(0,0,0,.07)' },
-  img: { width: '100%', height: 140, objectFit: 'cover' },
-  cardBody: { padding: 16 },
-  itemName: { margin: '0 0 4px', fontWeight: 600, fontSize: 15 },
-  price: { margin: '0 0 4px', color: '#16a34a', fontWeight: 700, fontSize: 16 },
-  stockLabel: { margin: '0 0 12px', fontSize: 12 },
-  addBtn: { width: '100%', padding: '8px 0', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer' },
-  center: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' },
-};

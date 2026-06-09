@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Query } from '@nestjs/common';
+import { Controller, Post, Get, Body, Query, Param } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { SendMagicLinkDto } from './dto/send-magic-link.dto';
 
@@ -20,5 +20,13 @@ export class AuthController {
   ): Promise<{ data: { token: string }; message: string }> {
     const result = await this.authService.verifyMagicLink(token);
     return { data: result, message: 'Login successful' };
+  }
+
+  @Post('dev-token/:email')
+  async devToken(
+    @Param('email') email: string,
+  ): Promise<{ data: { token: string }; message: string }> {
+    const result = await this.authService.devToken(email);
+    return { data: result, message: 'Dev login OK' };
   }
 }

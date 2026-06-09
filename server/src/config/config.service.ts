@@ -12,6 +12,10 @@ export class ConfigService {
     return process.env[key] ?? fallback;
   }
 
+  get isDev(): boolean {
+    return process.env['NODE_ENV'] !== 'production';
+  }
+
   get databaseUrl(): string {
     return this.require('DATABASE_URL');
   }

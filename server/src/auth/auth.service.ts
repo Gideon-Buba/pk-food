@@ -1,6 +1,7 @@
 import {
   Injectable,
   BadRequestException,
+  ForbiddenException,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -105,5 +106,15 @@ export class AuthService {
 
     const jwtToken = this.jwt.sign(payload);
     return { token: jwtToken };
+  }
+
+  async devToken(email: string): Promise<{ token: string }> {
+    if (!this.config.isDev) throw new ForbiddenException('Not available in production');
+
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) throw new NotFoundException(`No seeded user with email ${email}`);
+
+    const payload: JwtPayload = { sub: user.id, email: user.email, role: user.role };
+    return { token: this.jwt.sign(payload) };
   }
 }

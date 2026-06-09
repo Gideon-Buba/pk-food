@@ -1,19 +1,31 @@
 import { useNavigate } from 'react-router-dom';
+import { ChevronLeft, Trash2, Plus, Minus, ShoppingCart } from 'lucide-react';
 import { useCartStore } from '../store/cart';
 
 const DELIVERY_FEE = Number(import.meta.env.VITE_DELIVERY_FEE ?? 300);
 
 export default function Cart() {
-  const { items, updateQuantity, removeItem, clearCart, itemsTotal } = useCartStore();
   const navigate = useNavigate();
+  const { items, updateQuantity, removeItem, clearCart, itemsTotal } = useCartStore();
 
   if (items.length === 0) {
     return (
-      <div style={s.center}>
-        <div style={{ textAlign: 'center' }}>
-          <p style={{ fontSize: 48 }}>🛒</p>
-          <h2 style={{ color: '#6b7280' }}>Your cart is empty</h2>
-          <button style={s.btn} onClick={() => navigate('/menu')}>Browse menu</button>
+      <div style={{ minHeight: '100vh', background: 'var(--gray-50)', display: 'flex', flexDirection: 'column' }}>
+        <header className="nav-header">
+          <div className="nav-inner">
+            <button className="btn btn-ghost btn-icon-sm" onClick={() => navigate('/menu')}>
+              <ChevronLeft size={20} />
+            </button>
+            <span style={{ fontWeight: 700, fontSize: 16 }}>Your cart</span>
+          </div>
+        </header>
+        <div className="empty-state" style={{ flex: 1 }}>
+          <ShoppingCart className="empty-state-icon" />
+          <h3>Your cart is empty</h3>
+          <p>Add some food from the menu to get started</p>
+          <button className="btn btn-primary" onClick={() => navigate('/menu')}>
+            Browse menu
+          </button>
         </div>
       </div>
     );
@@ -23,76 +35,77 @@ export default function Cart() {
   const total = subtotal + DELIVERY_FEE;
 
   return (
-    <div style={s.root}>
-      <header style={s.header}>
-        <button style={s.back} onClick={() => navigate('/menu')}>← Menu</button>
-        <h1 style={s.title}>Your Cart</h1>
-        <button style={s.clearBtn} onClick={clearCart}>Clear</button>
-      </header>
-
-      <main style={s.main}>
-        <div style={s.items}>
-          {items.map(({ menuItem, quantity }) => (
-            <div key={menuItem.id} style={s.row}>
-              {menuItem.image && <img src={menuItem.image} alt={menuItem.name} style={s.thumb} />}
-              <div style={s.rowInfo}>
-                <p style={s.name}>{menuItem.name}</p>
-                <p style={s.vendor}>{menuItem.vendor.name}</p>
-                <p style={s.unitPrice}>₦{Number(menuItem.price).toLocaleString()} each</p>
-              </div>
-              <div style={s.qtyControl}>
-                <button style={s.qtyBtn} onClick={() => updateQuantity(menuItem.id, quantity - 1)}>−</button>
-                <span style={s.qty}>{quantity}</span>
-                <button style={s.qtyBtn} onClick={() => updateQuantity(menuItem.id, quantity + 1)}>+</button>
-              </div>
-              <div style={s.rowRight}>
-                <p style={s.rowTotal}>₦{(Number(menuItem.price) * quantity).toLocaleString()}</p>
-                <button style={s.remove} onClick={() => removeItem(menuItem.id)}>Remove</button>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div style={s.summary}>
-          <h2 style={s.summaryTitle}>Order summary</h2>
-          <div style={s.summaryRow}><span>Subtotal</span><span>₦{subtotal.toLocaleString()}</span></div>
-          <div style={s.summaryRow}><span>Delivery fee</span><span>₦{DELIVERY_FEE.toLocaleString()}</span></div>
-          <div style={{ ...s.summaryRow, fontWeight: 700, fontSize: 18, marginTop: 8 }}>
-            <span>Total</span><span>₦{total.toLocaleString()}</span>
-          </div>
-          <button style={s.checkoutBtn} onClick={() => navigate('/checkout')}>
-            Proceed to checkout
+    <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
+      <header className="nav-header">
+        <div className="nav-inner">
+          <button className="btn btn-ghost btn-icon-sm" onClick={() => navigate('/menu')}>
+            <ChevronLeft size={20} />
+          </button>
+          <span style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>Your cart</span>
+          <button className="btn btn-ghost btn-sm" onClick={clearCart} style={{ color: 'var(--error)' }}>
+            <Trash2 size={14} />
+            Clear all
           </button>
         </div>
-      </main>
+      </header>
+
+      <div className="page-wrap" style={{ maxWidth: 720 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Items */}
+          <div className="card" style={{ overflow: 'hidden' }}>
+            {items.map((ci, idx) => (
+              <div key={ci.menuItem.id}>
+                <div style={{ padding: '16px', display: 'flex', gap: 14, alignItems: 'center' }}>
+                  {ci.menuItem.image ? (
+                    <img src={ci.menuItem.image} alt={ci.menuItem.name} style={{ width: 60, height: 60, borderRadius: 'var(--radius-md)', objectFit: 'cover', flexShrink: 0 }} />
+                  ) : (
+                    <div style={{ width: 60, height: 60, borderRadius: 'var(--radius-md)', background: 'var(--gray-100)', flexShrink: 0 }} />
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ci.menuItem.name}</p>
+                    <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 8 }}>{ci.menuItem.vendor.name}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <button className="qty-btn" onClick={() => updateQuantity(ci.menuItem.id, ci.quantity - 1)}><Minus size={12} /></button>
+                      <span style={{ fontSize: 14, fontWeight: 700, minWidth: 24, textAlign: 'center' }}>{ci.quantity}</span>
+                      <button className="qty-btn" onClick={() => updateQuantity(ci.menuItem.id, ci.quantity + 1)}><Plus size={12} /></button>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                    <span style={{ fontWeight: 800, fontSize: 15, color: 'var(--primary)' }}>₦{(Number(ci.menuItem.price) * ci.quantity).toLocaleString()}</span>
+                    <button className="btn btn-ghost btn-icon-sm" onClick={() => removeItem(ci.menuItem.id)} style={{ color: 'var(--gray-400)' }}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+                {idx < items.length - 1 && <hr className="divider" />}
+              </div>
+            ))}
+          </div>
+
+          {/* Summary */}
+          <div className="card" style={{ padding: 20 }}>
+            <h3 className="section-title" style={{ marginBottom: 16 }}>Order summary</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--gray-600)' }}>
+                <span>Subtotal</span>
+                <span>₦{subtotal.toLocaleString()}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--gray-600)' }}>
+                <span>Delivery fee</span>
+                <span>₦{DELIVERY_FEE.toLocaleString()}</span>
+              </div>
+              <hr className="divider" style={{ margin: '4px 0' }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17, fontWeight: 800, letterSpacing: '-0.02em' }}>
+                <span>Total</span>
+                <span style={{ color: 'var(--primary)' }}>₦{total.toLocaleString()}</span>
+              </div>
+            </div>
+            <button className="btn btn-primary btn-lg btn-full" style={{ marginTop: 20 }} onClick={() => navigate('/checkout')}>
+              Proceed to checkout
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  root: { minHeight: '100vh', background: '#f9fafb', fontFamily: 'system-ui, sans-serif' },
-  center: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  header: { background: '#15803d', color: '#fff', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 },
-  back: { background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 15 },
-  title: { fontSize: 20, fontWeight: 700, margin: 0 },
-  clearBtn: { background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontSize: 14 },
-  main: { maxWidth: 760, margin: '24px auto', padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 24 },
-  items: { display: 'flex', flexDirection: 'column', gap: 12 },
-  row: { background: '#fff', borderRadius: 10, padding: 16, display: 'flex', alignItems: 'center', gap: 16, boxShadow: '0 1px 6px rgba(0,0,0,.06)' },
-  thumb: { width: 56, height: 56, borderRadius: 8, objectFit: 'cover', flexShrink: 0 },
-  rowInfo: { flex: 1, minWidth: 0 },
-  name: { margin: 0, fontWeight: 600 },
-  vendor: { margin: '2px 0', fontSize: 12, color: '#9ca3af' },
-  unitPrice: { margin: 0, fontSize: 13, color: '#6b7280' },
-  qtyControl: { display: 'flex', alignItems: 'center', gap: 8 },
-  qtyBtn: { width: 28, height: 28, borderRadius: '50%', border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  qty: { minWidth: 24, textAlign: 'center', fontWeight: 600 },
-  rowRight: { textAlign: 'right' },
-  rowTotal: { margin: 0, fontWeight: 700, color: '#15803d', fontSize: 16 },
-  remove: { background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 12, marginTop: 4, padding: 0 },
-  summary: { background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 6px rgba(0,0,0,.06)' },
-  summaryTitle: { margin: '0 0 16px', fontSize: 18 },
-  summaryRow: { display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f3f4f6' },
-  checkoutBtn: { marginTop: 20, width: '100%', padding: '14px 0', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 700, cursor: 'pointer' },
-  btn: { padding: '12px 32px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 600, cursor: 'pointer', marginTop: 16 },
-};
