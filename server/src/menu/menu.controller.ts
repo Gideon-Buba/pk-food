@@ -14,6 +14,7 @@ import { MenuService } from './menu.service';
 import { CreateMenuItemDto } from './dto/create-menu-item.dto';
 import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
 import { CreateVendorDto } from './dto/create-vendor.dto';
+import { CreateAnnouncementDto } from './dto/create-announcement.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -78,5 +79,37 @@ export class MenuController {
   async findAnnouncements() {
     const data = await this.menuService.findActiveAnnouncements();
     return { data, message: 'OK' };
+  }
+
+  @Get('announcements/all')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  async findAllAnnouncements() {
+    const data = await this.menuService.findAllAnnouncements();
+    return { data, message: 'OK' };
+  }
+
+  @Post('announcements')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  async createAnnouncement(@Body() dto: CreateAnnouncementDto) {
+    const data = await this.menuService.createAnnouncement(dto);
+    return { data, message: 'Announcement created' };
+  }
+
+  @Patch('announcements/:id/toggle')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  async toggleAnnouncement(@Param('id') id: string) {
+    const data = await this.menuService.toggleAnnouncement(id);
+    return { data, message: 'Announcement updated' };
+  }
+
+  @Delete('announcements/:id')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  async deleteAnnouncement(@Param('id') id: string) {
+    await this.menuService.deleteAnnouncement(id);
+    return { data: null, message: 'Announcement deleted' };
   }
 }

@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
-import { ShoppingCart, LogOut, Settings, Bike, Search, Plus, Minus, X, ClipboardList } from 'lucide-react';
+import { ShoppingCart, LogOut, Settings, Bike, Search, Plus, Minus, X, ClipboardList, ChevronLeft, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api, clearToken, getToken } from '../api/client';
 import { useCartStore } from '../store/cart';
@@ -53,81 +53,199 @@ export default function Menu() {
   // suppress unused variable warning for userEmail
   void userEmail;
 
+  const notices = announcements.filter(a => a.type === 'GENERAL');
+  const statuses = announcements.filter(a => a.type === 'STATUS');
+  const [noticeIdx, setNoticeIdx] = useState(0);
+  const [dismissedStatuses, setDismissedStatuses] = useState<Set<string>>(new Set());
+  const carouselTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (notices.length < 2) return;
+    carouselTimer.current = setInterval(() => {
+      setNoticeIdx(i => (i + 1) % notices.length);
+    }, 4500);
+    return () => { if (carouselTimer.current) clearInterval(carouselTimer.current); };
+  }, [notices.length]);
+
+  const prevNotice = () => {
+    if (carouselTimer.current) clearInterval(carouselTimer.current);
+    setNoticeIdx(i => (i - 1 + notices.length) % notices.length);
+  };
+  const nextNotice = () => {
+    if (carouselTimer.current) clearInterval(carouselTimer.current);
+    setNoticeIdx(i => (i + 1) % notices.length);
+  };
+
+  const visibleStatuses = statuses.filter(s => !dismissedStatuses.has(s.id));
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
       {/* Header */}
-      <header className="nav-header">
-        <div className="nav-inner">
-          <span style={{ fontWeight: 800, fontSize: 18, color: 'var(--primary)', letterSpacing: '-0.03em', flexShrink: 0 }}>
-            PK Food
-          </span>
+      <header className="app-header">
+        <div className="app-header-inner">
+          {/* Brand */}
+          <div className="nav-brand">
+            <img
+              src="/logo.jpeg"
+              alt="PK"
+              style={{ height: 38, width: 'auto', borderRadius: 6 }}
+              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+            <div>
+              <div style={{ fontWeight: 400, fontSize: 19, color: 'var(--primary)', letterSpacing: '0.04em', fontFamily: 'var(--font-heading)', lineHeight: 1 }}>
+                PK Food
+              </div>
+              <div className="nav-sub" style={{ fontSize: 10, color: 'var(--gray-400)', fontFamily: 'var(--font-ui)', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 2 }}>
+                NRS Canteen
+              </div>
+            </div>
+          </div>
 
-          {/* Search */}
-          <div className="search-wrap" style={{ flex: 1 }}>
-            <Search size={15} className="search-icon" />
+          {/* Search — desktop: inline centre; mobile: own row below */}
+          <div className="nav-search-wrap">
+            <div style={{ position: 'relative', width: '100%' }}>
+              <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', pointerEvents: 'none' }} />
+              <input
+                className="nav-search-input"
+                placeholder="Search menu…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+              {search && (
+                <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray-400)', display: 'flex', padding: 2 }}>
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="nav-actions">
+            {userRole === 'STAFF' && (
+              <button className="btn btn-ghost btn-sm nav-link-btn" onClick={() => navigate('/orders')}>
+                <ClipboardList size={16} />
+                <span className="nav-link-label">My Orders</span>
+              </button>
+            )}
+            {(userRole === 'ADMIN' || userRole === 'RUNNER') && (
+              <button className="btn btn-ghost btn-sm nav-link-btn" onClick={() => navigate('/runner')}>
+                <Bike size={16} />
+                <span className="nav-link-label">Queue</span>
+              </button>
+            )}
+            {userRole === 'ADMIN' && (
+              <button className="btn btn-ghost btn-sm nav-link-btn" onClick={() => navigate('/admin')}>
+                <Settings size={16} />
+                <span className="nav-link-label">Admin</span>
+              </button>
+            )}
+
+            <div className="nav-divider" />
+
+            <button className="nav-cart-btn" onClick={() => navigate('/cart')} data-filled={count > 0}>
+              <ShoppingCart size={16} />
+              {count > 0 ? (
+                <span className="nav-cart-count">{count > 9 ? '9+' : count}</span>
+              ) : (
+                <span className="nav-link-label">Cart</span>
+              )}
+            </button>
+
+            <button
+              className="btn btn-ghost btn-icon"
+              onClick={() => { clearToken(); navigate('/login'); }}
+              title="Sign out"
+              style={{ color: 'var(--gray-500)' }}
+            >
+              <LogOut size={17} />
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile-only search row */}
+        <div className="nav-search-mobile">
+          <div style={{ position: 'relative' }}>
+            <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', pointerEvents: 'none' }} />
             <input
-              className="input"
-              style={{ paddingLeft: 36, fontSize: 13 }}
+              className="nav-search-input"
               placeholder="Search menu…"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
             {search && (
-              <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray-400)', display: 'flex' }}>
-                <X size={14} />
+              <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray-400)', display: 'flex', padding: 2 }}>
+                <X size={13} />
               </button>
             )}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-            {userRole === 'STAFF' && (
-              <button className="btn btn-ghost btn-icon" onClick={() => navigate('/orders')} title="My orders">
-                <ClipboardList size={18} />
-              </button>
-            )}
-            {userRole === 'ADMIN' && (
-              <>
-                <button className="btn btn-ghost btn-icon" onClick={() => navigate('/admin')} title="Admin dashboard">
-                  <Settings size={18} />
-                </button>
-                <button className="btn btn-ghost btn-icon" onClick={() => navigate('/runner')} title="Delivery queue">
-                  <Bike size={18} />
-                </button>
-              </>
-            )}
-            {userRole === 'RUNNER' && (
-              <button className="btn btn-ghost btn-icon" onClick={() => navigate('/runner')} title="Delivery queue">
-                <Bike size={18} />
-              </button>
-            )}
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={() => navigate('/cart')}
-              style={{ position: 'relative', paddingRight: count > 0 ? 14 : undefined }}
-            >
-              <ShoppingCart size={15} />
-              Cart
-              {count > 0 && (
-                <span className="cart-badge">{count > 9 ? '9+' : count}</span>
-              )}
-            </button>
-            <button className="btn btn-ghost btn-icon" onClick={() => { clearToken(); navigate('/login'); }} title="Sign out">
-              <LogOut size={17} />
-            </button>
           </div>
         </div>
       </header>
 
       <div className="page-wrap">
-        {/* Announcements */}
-        {announcements.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-            {announcements.map(a => (
-              <div key={a.id} className={`announcement announcement-${a.type.toLowerCase()}`}>
-                <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'currentColor', flexShrink: 0 }} />
-                {a.message}
+        {/* Status banners — each dismissible */}
+        {visibleStatuses.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: notices.length > 0 ? 8 : 20 }}>
+            {visibleStatuses.map(s => (
+              <div key={s.id} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '9px 12px 9px 0',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--primary-subtle)',
+                border: '1px solid var(--primary-light)',
+                overflow: 'hidden',
+              }}>
+                <div style={{ width: 3, alignSelf: 'stretch', background: 'var(--primary)', flexShrink: 0 }} />
+                <span style={{ flex: 1, fontSize: 13, color: 'var(--primary-darker)', lineHeight: 1.5, paddingLeft: 2 }}>{s.message}</span>
+                <button
+                  onClick={() => setDismissedStatuses(p => new Set([...p, s.id]))}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', display: 'flex', padding: 4, flexShrink: 0, borderRadius: 4, opacity: 0.6 }}
+                >
+                  <X size={14} />
+                </button>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Notices — sliding carousel */}
+        {notices.length > 0 && (
+          <div style={{ marginBottom: 20, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              {/* Left accent bar + label */}
+              <div style={{ display: 'flex', alignItems: 'center', alignSelf: 'stretch', flexShrink: 0, borderRight: '1px solid #fde68a' }}>
+                <div style={{ width: 3, alignSelf: 'stretch', background: 'var(--amber)' }} />
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#92400e', fontFamily: 'var(--font-ui)', padding: '0 10px', whiteSpace: 'nowrap' }}>Notice</span>
+              </div>
+
+              {/* Sliding track */}
+              <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
+                <div style={{
+                  display: 'flex',
+                  width: `${notices.length * 100}%`,
+                  transform: `translateX(-${noticeIdx * (100 / notices.length)}%)`,
+                  transition: 'transform 0.4s cubic-bezier(0.4,0,0.2,1)',
+                }}>
+                  {notices.map(n => (
+                    <div key={n.id} style={{ width: `${100 / notices.length}%`, padding: '10px 14px', flexShrink: 0 }}>
+                      <p style={{ fontSize: 13, color: '#78350f', lineHeight: 1.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {n.message}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Controls */}
+              {notices.length > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '0 8px', flexShrink: 0, borderLeft: '1px solid #fde68a' }}>
+                  <button onClick={prevNotice} className="carousel-nav-btn"><ChevronLeft size={14} /></button>
+                  <span style={{ fontSize: 11, color: '#92400e', fontWeight: 600, minWidth: 28, textAlign: 'center', fontFamily: 'var(--font-ui)' }}>
+                    {noticeIdx + 1}/{notices.length}
+                  </span>
+                  <button onClick={nextNotice} className="carousel-nav-btn"><ChevronRight size={14} /></button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -214,7 +332,7 @@ export default function Menu() {
                       {item.name}
                     </p>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                      <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--primary)', letterSpacing: '-0.02em' }}>
+                      <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--primary)', fontFamily: 'var(--font-display)', letterSpacing: '-0.02em' }}>
                         ₦{Number(item.price).toLocaleString()}
                       </span>
                       {cartItem ? (

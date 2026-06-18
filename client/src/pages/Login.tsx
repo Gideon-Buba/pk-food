@@ -57,7 +57,7 @@ export default function Login() {
       {/* Left panel */}
       <div style={{
         flex: '0 0 420px',
-        background: 'linear-gradient(160deg, #14532d 0%, #16a34a 60%, #4ade80 100%)',
+        background: 'linear-gradient(160deg, #1a3830 0%, #316752 60%, #4e9a7e 100%)',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'center',
@@ -77,24 +77,25 @@ export default function Login() {
           background: 'rgba(255,255,255,.04)',
         }} />
         <div style={{ position: 'relative' }}>
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            background: 'rgba(255,255,255,.15)', borderRadius: 10,
-            padding: '8px 14px', marginBottom: 32,
-          }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#4ade80' }} />
-            <span style={{ fontSize: 13, fontWeight: 600 }}>NRS Internal</span>
+          {/* Logo */}
+          <div style={{ marginBottom: 32 }}>
+            <img
+              src="/logo.jpeg"
+              alt="PK Limited"
+              style={{ height: 120, width: 'auto', filter: 'brightness(0) invert(1)', opacity: 0.95 }}
+              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
           </div>
-          <h1 style={{ fontSize: 38, fontWeight: 800, lineHeight: 1.1, marginBottom: 16, letterSpacing: '-0.03em' }}>
+          <h1 style={{ fontSize: 42, fontWeight: 300, lineHeight: 1.1, marginBottom: 16, letterSpacing: '0.04em', fontFamily: 'var(--font-heading)' }}>
             PK Food
           </h1>
-          <p style={{ fontSize: 16, opacity: .8, lineHeight: 1.6 }}>
+          <p style={{ fontSize: 15, opacity: .8, lineHeight: 1.7, fontFamily: 'var(--font-ui)' }}>
             Order fresh meals from PK Canteen and have them delivered right to your floor.
           </p>
           <div style={{ marginTop: 48, display: 'flex', flexDirection: 'column', gap: 16 }}>
             {['Browse the full menu', 'Checkout with Paystack', 'Track your delivery'].map((f) => (
               <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 10, opacity: .85 }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', flexShrink: 0 }} />
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4e9a7e', flexShrink: 0 }} />
                 <span style={{ fontSize: 14 }}>{f}</span>
               </div>
             ))}
@@ -133,10 +134,10 @@ export default function Login() {
             </div>
           ) : (
             <>
-              <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 6, letterSpacing: '-0.03em' }}>
+              <h2 style={{ fontSize: 32, fontWeight: 400, marginBottom: 6, letterSpacing: '0.02em', fontFamily: 'var(--font-heading)' }}>
                 Sign in to PK Food
               </h2>
-              <p style={{ color: 'var(--gray-500)', fontSize: 14, marginBottom: 28 }}>
+              <p style={{ color: 'var(--gray-500)', fontSize: 14, marginBottom: 28, fontFamily: 'var(--font-ui)' }}>
                 Enter your NRS email to receive a secure login link.
               </p>
 

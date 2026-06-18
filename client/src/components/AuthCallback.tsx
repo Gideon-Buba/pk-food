@@ -56,5 +56,5 @@ export default function AuthCallback() {
 const s: Record<string, React.CSSProperties> = {
   container: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9fafb' },
   card: { background: '#fff', padding: 32, borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,.08)', textAlign: 'center' },
-  link: { color: '#16a34a', fontWeight: 600 },
+  link: { color: '#316752', fontWeight: 600 },
 };

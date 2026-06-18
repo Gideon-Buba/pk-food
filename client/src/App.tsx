@@ -25,7 +25,7 @@ export default function App() {
             fontWeight: 500,
             boxShadow: '0 4px 16px rgba(0,0,0,.12)',
           },
-          success: { iconTheme: { primary: '#16a34a', secondary: '#fff' } },
+          success: { iconTheme: { primary: '#316752', secondary: '#fff' } },
         }}
       />
       <Routes>

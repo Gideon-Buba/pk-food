@@ -1,11 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store } from 'lucide-react';
+import { ChevronLeft, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
 import type { ApiResponse, MenuItem, Order, OrderStatus, Vendor } from '../types';
 
-type Tab = 'orders' | 'menu' | 'vendors';
+type Tab = 'orders' | 'menu' | 'vendors' | 'announcements';
+
+interface Announcement {
+  id: string;
+  type: 'STATUS' | 'GENERAL';
+  message: string;
+  active: boolean;
+  createdAt: string;
+}
 
 const STATUS_OPTIONS: OrderStatus[] = ['PENDING','CONFIRMED','PREPARING','READY','IN_TRANSIT','DELIVERED','CANCELLED'];
 
@@ -29,6 +37,9 @@ export default function AdminDashboard() {
   const [showAddItem, setShowAddItem] = useState(false);
   const [newItem, setNewItem] = useState({ name: '', price: '', vendorId: '', totalStock: '50', onlineStock: '50', image: '' });
   const [addingItem, setAddingItem] = useState(false);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [newAnnouncement, setNewAnnouncement] = useState({ type: 'GENERAL' as 'STATUS' | 'GENERAL', message: '' });
+  const [addingAnnouncement, setAddingAnnouncement] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -36,8 +47,9 @@ export default function AdminDashboard() {
       api.get<ApiResponse<Order[]>>('/orders'),
       api.get<ApiResponse<MenuItem[]>>('/menu/items?all=true'),
       api.get<ApiResponse<Vendor[]>>('/menu/vendors'),
+      api.get<ApiResponse<Announcement[]>>('/menu/announcements/all'),
     ])
-      .then(([o, m, v]) => { setOrders(o.data.data); setMenuItems(m.data.data); setVendors(v.data.data); })
+      .then(([o, m, v, a]) => { setOrders(o.data.data); setMenuItems(m.data.data); setVendors(v.data.data); setAnnouncements(a.data.data); })
       .catch(() => toast.error('Failed to load data'))
       .finally(() => setLoading(false));
   };
@@ -93,6 +105,33 @@ export default function AdminDashboard() {
     } catch { toast.error('Failed to update item'); }
   };
 
+  const handleCreateAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddingAnnouncement(true);
+    try {
+      const res = await api.post<ApiResponse<Announcement>>('/menu/announcements', newAnnouncement);
+      setAnnouncements(prev => [res.data.data, ...prev]);
+      setNewAnnouncement({ type: 'GENERAL', message: '' });
+      toast.success('Announcement posted');
+    } catch { toast.error('Failed to post announcement'); }
+    finally { setAddingAnnouncement(false); }
+  };
+
+  const handleToggleAnnouncement = async (id: string) => {
+    try {
+      const res = await api.patch<ApiResponse<Announcement>>(`/menu/announcements/${id}/toggle`);
+      setAnnouncements(prev => prev.map(a => a.id === id ? res.data.data : a));
+    } catch { toast.error('Failed to update announcement'); }
+  };
+
+  const handleDeleteAnnouncement = async (id: string) => {
+    try {
+      await api.delete(`/menu/announcements/${id}`);
+      setAnnouncements(prev => prev.filter(a => a.id !== id));
+      toast.success('Announcement deleted');
+    } catch { toast.error('Failed to delete announcement'); }
+  };
+
   const pending = orders.filter(o => o.status === 'PENDING').length;
   const revenue = orders.filter(o => o.paid).reduce((s, o) => s + Number(o.deliveryFee) + o.items.reduce((is, i) => is + Number(i.unitPrice) * i.quantity, 0), 0);
 
@@ -100,6 +139,7 @@ export default function AdminDashboard() {
     { id: 'orders', label: 'Orders', icon: <ShoppingBag size={15} /> },
     { id: 'menu', label: 'Menu', icon: <Package size={15} /> },
     { id: 'vendors', label: 'Vendors', icon: <Store size={15} /> },
+    { id: 'announcements', label: 'Notices', icon: <Megaphone size={15} /> },
   ];
 
   return (
@@ -280,6 +320,78 @@ export default function AdminDashboard() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Announcements tab */}
+            {tab === 'announcements' && (
+              <div>
+                <form onSubmit={handleCreateAnnouncement} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24, padding: 16, borderRadius: 'var(--radius-md)', background: 'var(--gray-50)', border: '1px solid var(--gray-200)' }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-700)' }}>Post an announcement</p>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <select
+                      className="input"
+                      value={newAnnouncement.type}
+                      onChange={e => setNewAnnouncement(a => ({ ...a, type: e.target.value as 'STATUS' | 'GENERAL' }))}
+                      style={{ width: 130, flexShrink: 0, cursor: 'pointer' }}
+                    >
+                      <option value="GENERAL">Notice</option>
+                      <option value="STATUS">Status</option>
+                    </select>
+                    <input
+                      className="input"
+                      placeholder="e.g. Canteen closes at 2pm today"
+                      value={newAnnouncement.message}
+                      onChange={e => setNewAnnouncement(a => ({ ...a, message: e.target.value }))}
+                      required
+                      style={{ flex: 1, minWidth: 200 }}
+                    />
+                    <button type="submit" className="btn btn-primary" disabled={addingAnnouncement} style={{ flexShrink: 0 }}>
+                      {addingAnnouncement ? <span className="spinner" /> : <Plus size={15} />}
+                      Post
+                    </button>
+                  </div>
+                  <p style={{ fontSize: 11, color: 'var(--gray-400)' }}>
+                    <strong>Status</strong> = pinned banner with dismiss button · <strong>Notice</strong> = scrolling carousel
+                  </p>
+                </form>
+
+                {announcements.length === 0 ? (
+                  <div className="empty-state" style={{ padding: 40 }}>
+                    <Megaphone className="empty-state-icon" />
+                    <h3>No announcements</h3>
+                    <p>Post one above to show it on the menu page</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {announcements.map(a => (
+                      <div key={a.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '12px 14px', borderRadius: 'var(--radius-md)',
+                        border: `1px solid ${a.active ? (a.type === 'STATUS' ? 'var(--primary-light)' : '#fde68a') : 'var(--gray-200)'}`,
+                        background: a.active ? (a.type === 'STATUS' ? 'var(--primary-subtle)' : '#fffbeb') : '#fff',
+                        opacity: a.active ? 1 : 0.55,
+                        transition: 'all 0.15s',
+                      }}>
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
+                          textTransform: 'uppercase', flexShrink: 0, width: 46,
+                          color: a.type === 'STATUS' ? 'var(--primary)' : 'var(--amber)',
+                        }}>
+                          {a.type === 'STATUS' ? 'Status' : 'Notice'}
+                        </span>
+                        <span style={{ flex: 1, fontSize: 13, color: 'var(--gray-800)' }}>{a.message}</span>
+                        <span style={{ fontSize: 11, color: 'var(--gray-400)', flexShrink: 0 }}>{a.active ? 'Live' : 'Hidden'}</span>
+                        <button className="btn btn-ghost btn-icon-sm" onClick={() => handleToggleAnnouncement(a.id)} title={a.active ? 'Hide' : 'Show'}>
+                          {a.active ? <ToggleRight size={20} color="var(--primary)" /> : <ToggleLeft size={20} color="var(--gray-400)" />}
+                        </button>
+                        <button className="btn btn-ghost btn-icon-sm" onClick={() => handleDeleteAnnouncement(a.id)} title="Delete" style={{ color: 'var(--error)' }}>
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

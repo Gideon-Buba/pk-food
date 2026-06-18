@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ItemStatus, MenuItem, Vendor } from '@prisma/client';
+import { Announcement, AnnouncementType, ItemStatus, MenuItem, Vendor } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMenuItemDto } from './dto/create-menu-item.dto';
 import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
 import { CreateVendorDto } from './dto/create-vendor.dto';
+import { CreateAnnouncementDto } from './dto/create-announcement.dto';
 
 type MenuItemWithVendor = MenuItem & { vendor: Vendor };
 type SerializedMenuItem = Omit<MenuItemWithVendor, 'price'> & { price: number };
@@ -91,10 +92,35 @@ export class MenuService {
     return this.prisma.vendor.create({ data: { name: dto.name } });
   }
 
-  async findActiveAnnouncements() {
+  async findActiveAnnouncements(): Promise<Announcement[]> {
     return this.prisma.announcement.findMany({
       where: { active: true },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async findAllAnnouncements(): Promise<Announcement[]> {
+    return this.prisma.announcement.findMany({ orderBy: { createdAt: 'desc' } });
+  }
+
+  async createAnnouncement(dto: CreateAnnouncementDto): Promise<Announcement> {
+    return this.prisma.announcement.create({
+      data: { type: dto.type as AnnouncementType, message: dto.message },
+    });
+  }
+
+  async toggleAnnouncement(id: string): Promise<Announcement> {
+    const existing = await this.prisma.announcement.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Announcement not found');
+    return this.prisma.announcement.update({
+      where: { id },
+      data: { active: !existing.active },
+    });
+  }
+
+  async deleteAnnouncement(id: string): Promise<void> {
+    const existing = await this.prisma.announcement.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Announcement not found');
+    await this.prisma.announcement.delete({ where: { id } });
   }
 }
