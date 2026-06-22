@@ -1,24 +1,33 @@
 import { Controller, Post, Get, Body, Query, Param } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { SendMagicLinkDto } from './dto/send-magic-link.dto';
+import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('magic-link')
-  async sendMagicLink(
-    @Body() dto: SendMagicLinkDto,
+  @Post('register')
+  async register(
+    @Body() dto: RegisterDto,
   ): Promise<{ data: null; message: string }> {
-    await this.authService.sendMagicLink(dto.email);
-    return { data: null, message: 'Magic link sent — check your email' };
+    await this.authService.register(dto.email, dto.password);
+    return { data: null, message: 'Account created — check your email to verify' };
   }
 
-  @Get('verify')
-  async verify(
+  @Get('verify-email')
+  async verifyEmail(
     @Query('token') token: string,
+  ): Promise<{ data: null; message: string }> {
+    await this.authService.verifyEmail(token);
+    return { data: null, message: 'Email verified — you can now log in' };
+  }
+
+  @Post('login')
+  async login(
+    @Body() dto: LoginDto,
   ): Promise<{ data: { token: string }; message: string }> {
-    const result = await this.authService.verifyMagicLink(token);
+    const result = await this.authService.login(dto.email, dto.password);
     return { data: result, message: 'Login successful' };
   }
 

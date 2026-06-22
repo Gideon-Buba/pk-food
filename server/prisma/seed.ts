@@ -1,4 +1,5 @@
 import { PrismaClient, Role } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -13,30 +14,30 @@ async function main(): Promise<void> {
 
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
-  await prisma.magicLink.deleteMany();
   await prisma.menuItem.deleteMany();
   await prisma.vendor.deleteMany();
   await prisma.announcement.deleteMany();
 
-  // Test users — dev login only
+  // Test users — password: "test1234", all pre-verified
+  const hashedPassword = await bcrypt.hash('test1234', 12);
   await Promise.all([
     prisma.user.upsert({
       where: { email: 'staff@nrs.gov.ng' },
-      update: { role: Role.STAFF },
-      create: { email: 'staff@nrs.gov.ng', role: Role.STAFF },
+      update: { role: Role.STAFF, password: hashedPassword, emailVerified: true },
+      create: { email: 'staff@nrs.gov.ng', role: Role.STAFF, password: hashedPassword, emailVerified: true },
     }),
     prisma.user.upsert({
       where: { email: 'admin@nrs.gov.ng' },
-      update: { role: Role.ADMIN },
-      create: { email: 'admin@nrs.gov.ng', role: Role.ADMIN },
+      update: { role: Role.ADMIN, password: hashedPassword, emailVerified: true },
+      create: { email: 'admin@nrs.gov.ng', role: Role.ADMIN, password: hashedPassword, emailVerified: true },
     }),
     prisma.user.upsert({
       where: { email: 'runner@nrs.gov.ng' },
-      update: { role: Role.RUNNER },
-      create: { email: 'runner@nrs.gov.ng', role: Role.RUNNER },
+      update: { role: Role.RUNNER, password: hashedPassword, emailVerified: true },
+      create: { email: 'runner@nrs.gov.ng', role: Role.RUNNER, password: hashedPassword, emailVerified: true },
     }),
   ]);
-  console.log('Test users: staff@nrs.gov.ng | admin@nrs.gov.ng | runner@nrs.gov.ng');
+  console.log('Test users seeded (password: test1234): staff | admin | runner @nrs.gov.ng');
 
   const [canteen, snacks, bar] = await Promise.all([
     prisma.vendor.create({ data: { name: 'PK Canteen' } }),
@@ -266,12 +267,12 @@ async function main(): Promise<void> {
     data: [
       {
         type: 'STATUS',
-        message: '🟢 Canteen open — last orders by 2:00 PM daily.',
+        message: 'Canteen is open — last orders by 2:00 PM daily.',
         active: true,
       },
       {
         type: 'GENERAL',
-        message: '🎉 Free delivery on all orders this week!',
+        message: 'Free delivery on all orders this week!',
         active: true,
       },
     ],

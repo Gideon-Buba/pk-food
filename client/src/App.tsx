@@ -9,7 +9,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import RunnerQueue from './pages/RunnerQueue';
 import MyOrders from './pages/MyOrders';
 import ProtectedRoute from './components/ProtectedRoute';
-import AuthCallback from './components/AuthCallback';
+import VerifyEmail from './pages/VerifyEmail';
 
 export default function App() {
   return (
@@ -30,7 +30,7 @@ export default function App() {
       />
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/" element={<Navigate to="/menu" replace />} />
         <Route path="/menu" element={<ProtectedRoute><Menu /></ProtectedRoute>} />
         <Route path="/cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
