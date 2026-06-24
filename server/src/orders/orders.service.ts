@@ -63,6 +63,7 @@ export class OrdersService {
           userId,
           floor: dto.floor ?? user?.floor ?? '',
           officeNumber: dto.officeNumber ?? user?.officeNumber ?? '',
+          phone: dto.phone,
           deliveryFee: this.config.deliveryFee,
           items: {
             create: dto.items.map((orderItem) => {

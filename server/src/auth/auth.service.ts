@@ -15,6 +15,7 @@ import { ConfigService } from '../config/config.service';
 
 const ALLOWED_DOMAIN = 'nrs.gov.ng';
 const VERIFY_TTL_HOURS = 24;
+const RESET_TTL_MINUTES = 60;
 
 interface JwtPayload {
   sub: string;
@@ -111,6 +112,55 @@ export class AuthService {
 
     const payload: JwtPayload = { sub: user.id, email: user.email, role: user.role };
     return { token: this.jwt.sign(payload) };
+  }
+
+  async forgotPassword(email: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    // Always return success — never reveal whether an email exists
+    if (!user || !user.emailVerified) return;
+
+    const resetToken = randomBytes(32).toString('hex');
+    const resetTokenExpiry = new Date(Date.now() + RESET_TTL_MINUTES * 60 * 1000);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { resetToken, resetTokenExpiry },
+    });
+
+    const link = `${this.config.appUrl}/reset-password?token=${resetToken}`;
+
+    await this.transporter.sendMail({
+      from: this.config.fromEmail,
+      to: email,
+      subject: 'Reset your PK Food password',
+      html: `
+        <h2>PK Food — Password reset</h2>
+        <p>Click the button below to set a new password. This link expires in ${RESET_TTL_MINUTES} minutes.</p>
+        <a href="${link}" style="display:inline-block;padding:12px 24px;background:#316752;color:#fff;text-decoration:none;border-radius:6px;">
+          Reset password
+        </a>
+        <p style="margin-top:16px;color:#666;font-size:12px;">
+          If you didn't request this, you can safely ignore this email.
+        </p>
+      `,
+    });
+  }
+
+  async resetPassword(token: string, password: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { resetToken: token } });
+
+    if (!user || !user.resetTokenExpiry) {
+      throw new BadRequestException('Invalid or expired reset link');
+    }
+    if (user.resetTokenExpiry < new Date()) {
+      throw new BadRequestException('Reset link has expired — please request a new one');
+    }
+
+    const hashed = await bcrypt.hash(password, 12);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashed, resetToken: null, resetTokenExpiry: null },
+    });
   }
 
   async devToken(email: string): Promise<{ token: string }> {

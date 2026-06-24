@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, CreditCard, MapPin } from 'lucide-react';
+import { ChevronLeft, CreditCard, MapPin, Phone } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
 import { useCartStore } from '../store/cart';
@@ -15,6 +15,7 @@ export default function Checkout() {
   const { items, itemsTotal, clearCart } = useCartStore();
   const [floor, setFloor] = useState('');
   const [officeNumber, setOfficeNumber] = useState('');
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
 
   if (items.length === 0) { navigate('/cart'); return null; }
@@ -28,7 +29,7 @@ export default function Checkout() {
     try {
       const orderRes = await api.post<ApiResponse<Order>>('/orders', {
         items: items.map(({ menuItem, quantity }) => ({ menuItemId: menuItem.id, quantity })),
-        floor, officeNumber,
+        floor, officeNumber, phone,
       });
       const orderId = orderRes.data.data.id;
       const payRes = await api.post<ApiResponse<PaystackInitData>>('/payments/initialize', { orderId });
@@ -73,6 +74,16 @@ export default function Checkout() {
                   <option value="B">Wing B</option>
                   <option value="C">Wing C</option>
                 </select>
+              </div>
+              <div className="form-group">
+                <label className="label" htmlFor="phone">
+                  <Phone size={13} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+                  Phone number
+                </label>
+                <input id="phone" className="input" type="tel" placeholder="e.g. 08012345678"
+                  value={phone} onChange={e => setPhone(e.target.value)}
+                  pattern="^(\+?234|0)[789]\d{9}$" required
+                  title="Enter a valid Nigerian phone number (e.g. 08012345678 or +2348012345678)" />
               </div>
               <button type="submit" disabled={loading} className="btn btn-primary btn-lg btn-full" style={{ marginTop: 4 }}>
                 {loading ? <span className="spinner" /> : <CreditCard size={17} />}

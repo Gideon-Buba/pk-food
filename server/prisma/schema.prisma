@@ -41,6 +41,8 @@ model User {
   emailVerified     Boolean   @default(false)
   verifyToken       String?   @unique
   verifyTokenExpiry DateTime?
+  resetToken        String?   @unique
+  resetTokenExpiry  DateTime?
   role              Role      @default(STAFF)
   floor             String?
   officeNumber      String?
@@ -87,6 +89,7 @@ model Order {
   status       OrderStatus @default(PENDING)
   floor        String
   officeNumber String
+  phone        String
   paystackRef  String?
   paid         Boolean     @default(false)
   createdAt    DateTime    @default(now())

@@ -4,6 +4,7 @@ import {
   IsNotEmpty,
   IsPositive,
   IsString,
+  Matches,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -31,4 +32,8 @@ export class CreateOrderDto {
   @IsString()
   @IsNotEmpty()
   officeNumber!: string;
+
+  @IsString()
+  @Matches(/^(\+?234|0)[789]\d{9}$/, { message: 'Enter a valid Nigerian phone number' })
+  phone!: string;
 }
