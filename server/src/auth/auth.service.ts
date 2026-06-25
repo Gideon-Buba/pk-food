@@ -9,7 +9,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
-import * as nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
 
@@ -25,46 +25,19 @@ interface JwtPayload {
 
 @Injectable()
 export class AuthService {
-  private readonly transporter: nodemailer.Transporter;
+  private readonly resend: Resend;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
   ) {
-    this.transporter = nodemailer.createTransport({
-      host: this.config.smtpHost,
-      port: this.config.smtpPort,
-      secure: this.config.smtpPort === 465,
-      auth: {
-        user: this.config.smtpUser,
-        pass: this.config.smtpPass,
-      },
-    });
+    this.resend = new Resend(this.config.resendApiKey);
   }
 
-  async register(email: string, password: string): Promise<void> {
-    const domain = email.split('@')[1];
-    if (domain !== ALLOWED_DOMAIN) {
-      throw new BadRequestException(
-        `Only @${ALLOWED_DOMAIN} email addresses are allowed`,
-      );
-    }
-
-    const existing = await this.prisma.user.findUnique({ where: { email } });
-    if (existing) throw new ConflictException('An account with this email already exists');
-
-    const hashed = await bcrypt.hash(password, 12);
-    const verifyToken = randomBytes(32).toString('hex');
-    const verifyTokenExpiry = new Date(Date.now() + VERIFY_TTL_HOURS * 60 * 60 * 1000);
-
-    await this.prisma.user.create({
-      data: { email, password: hashed, verifyToken, verifyTokenExpiry },
-    });
-
-    const link = `${this.config.appUrl}/verify-email?token=${verifyToken}`;
-
-    await this.transporter.sendMail({
+  private async sendVerificationEmail(email: string, token: string): Promise<void> {
+    const link = `${this.config.appUrl}/verify-email?token=${token}`;
+    const { error } = await this.resend.emails.send({
       from: this.config.fromEmail,
       to: email,
       subject: 'Verify your PK Food account',
@@ -79,6 +52,65 @@ export class AuthService {
         </p>
       `,
     });
+    if (error) throw new Error(error.message);
+  }
+
+  async register(email: string, password: string): Promise<void> {
+    const domain = email.split('@')[1];
+    if (domain !== ALLOWED_DOMAIN) {
+      throw new BadRequestException(
+        `Only @${ALLOWED_DOMAIN} email addresses are allowed`,
+      );
+    }
+
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing && existing.emailVerified) {
+      throw new ConflictException('An account with this email already exists');
+    }
+
+    const hashed = await bcrypt.hash(password, 12);
+    const verifyToken = randomBytes(32).toString('hex');
+    const verifyTokenExpiry = new Date(Date.now() + VERIFY_TTL_HOURS * 60 * 60 * 1000);
+
+    if (existing) {
+      // Unverified account — refresh token and resend
+      await this.prisma.user.update({
+        where: { email },
+        data: { password: hashed, verifyToken, verifyTokenExpiry },
+      });
+    } else {
+      await this.prisma.user.create({
+        data: { email, password: hashed, verifyToken, verifyTokenExpiry },
+      });
+    }
+
+    try {
+      await this.sendVerificationEmail(email, verifyToken);
+    } catch {
+      // If email fails and this was a new account, clean up so user can retry
+      if (!existing) {
+        await this.prisma.user.delete({ where: { email } });
+      }
+      throw new BadRequestException(
+        'Could not send verification email — please try again later',
+      );
+    }
+  }
+
+  async resendVerification(email: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    // Always return silently — don't reveal account existence
+    if (!user || user.emailVerified) return;
+
+    const verifyToken = randomBytes(32).toString('hex');
+    const verifyTokenExpiry = new Date(Date.now() + VERIFY_TTL_HOURS * 60 * 60 * 1000);
+
+    await this.prisma.user.update({
+      where: { email },
+      data: { verifyToken, verifyTokenExpiry },
+    });
+
+    await this.sendVerificationEmail(email, verifyToken);
   }
 
   async verifyEmail(token: string): Promise<void> {
@@ -129,7 +161,7 @@ export class AuthService {
 
     const link = `${this.config.appUrl}/reset-password?token=${resetToken}`;
 
-    await this.transporter.sendMail({
+    const { error } = await this.resend.emails.send({
       from: this.config.fromEmail,
       to: email,
       subject: 'Reset your PK Food password',
@@ -144,6 +176,7 @@ export class AuthService {
         </p>
       `,
     });
+    if (error) throw new Error(error.message);
   }
 
   async resetPassword(token: string, password: string): Promise<void> {

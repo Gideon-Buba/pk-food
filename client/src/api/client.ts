@@ -19,7 +19,9 @@ api.interceptors.response.use(
   (response) => response,
   (error: unknown) => {
     const err = error as { response?: { status?: number } };
-    if (err.response?.status === 401 && !window.location.pathname.startsWith('/auth')) {
+    const publicPaths = ['/login', '/verify-email', '/forgot-password', '/reset-password'];
+    const onPublicPage = publicPaths.some(p => window.location.pathname.startsWith(p));
+    if (err.response?.status === 401 && !onPublicPage) {
       localStorage.removeItem(TOKEN_KEY);
       window.location.href = '/login';
     }

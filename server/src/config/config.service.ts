@@ -36,24 +36,12 @@ export class ConfigService {
     return this.optional('APP_URL', 'http://localhost:5173');
   }
 
-  get smtpHost(): string {
-    return this.require('SMTP_HOST');
-  }
-
-  get smtpPort(): number {
-    return parseInt(this.optional('SMTP_PORT', '587'), 10);
-  }
-
-  get smtpUser(): string {
-    return this.require('SMTP_USER');
-  }
-
-  get smtpPass(): string {
-    return this.require('SMTP_PASS');
+  get resendApiKey(): string {
+    return this.require('RESEND_API_KEY');
   }
 
   get fromEmail(): string {
-    return this.optional('FROM_EMAIL', 'noreply@nrs.gov.ng');
+    return this.optional('FROM_EMAIL', 'onboarding@resend.dev');
   }
 
   get paystackSecretKey(): string {

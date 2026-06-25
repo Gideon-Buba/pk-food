@@ -33,6 +33,14 @@ export class AuthController {
     return { data: result, message: 'Login successful' };
   }
 
+  @Post('resend-verification')
+  async resendVerification(
+    @Body() dto: ForgotPasswordDto,
+  ): Promise<{ data: null; message: string }> {
+    await this.authService.resendVerification(dto.email);
+    return { data: null, message: 'If that email is registered and unverified, a new link has been sent' };
+  }
+
   @Post('forgot-password')
   async forgotPassword(
     @Body() dto: ForgotPasswordDto,

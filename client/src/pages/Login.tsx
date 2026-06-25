@@ -35,9 +35,24 @@ export default function Login() {
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
   const [registered, setRegistered] = useState(false);
+  const [resending, setResending]   = useState(false);
+  const [resendDone, setResendDone] = useState(false);
   const [devLoading, setDevLoading] = useState<string | null>(null);
 
   const switchMode = (m: Mode) => { setMode(m); setError(''); setConfirm(''); };
+
+  const handleResend = async () => {
+    setResending(true);
+    try {
+      await api.post('/auth/resend-verification', { email });
+      setResendDone(true);
+    } catch {
+      // Silently ignore — server never reveals account status
+      setResendDone(true);
+    } finally {
+      setResending(false);
+    }
+  };
   const isRegister = mode === 'register';
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -96,7 +111,20 @@ export default function Login() {
                 We sent a verification link to <span className="font-medium text-foreground">{email}</span>.
                 Click it to activate your account.
               </p>
-              <Button variant="outline" onClick={() => { setRegistered(false); setPassword(''); setConfirm(''); switchMode('login'); }}>
+              {resendDone ? (
+                <p className="text-sm text-primary font-medium mb-4">New link sent — check your inbox.</p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={resending}
+                  className="text-sm text-muted-foreground hover:text-primary transition-colors mb-4 flex items-center gap-1.5 mx-auto"
+                >
+                  {resending && <span className="spinner" style={{ width: 12, height: 12 }} />}
+                  {resending ? 'Sending…' : "Didn't receive it? Resend"}
+                </button>
+              )}
+              <Button variant="outline" onClick={() => { setRegistered(false); setPassword(''); setConfirm(''); setResendDone(false); switchMode('login'); }}>
                 Back to sign in
               </Button>
             </div>

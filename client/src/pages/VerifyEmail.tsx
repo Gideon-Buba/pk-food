@@ -56,7 +56,10 @@ export default function VerifyEmail() {
             </div>
             <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, color: 'var(--gray-900)' }}>Verification failed</h2>
             <p style={{ color: 'var(--gray-500)', fontSize: 14, marginBottom: 24 }}>{message}</p>
-            <Link to="/login" className="btn btn-secondary">Back to login</Link>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+              <Link to="/login" className="btn btn-secondary">Back to login</Link>
+              <Link to="/login?resend=1" className="btn btn-primary">Resend link</Link>
+            </div>
           </>
         )}
       </div>
