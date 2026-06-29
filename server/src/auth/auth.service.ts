@@ -8,8 +8,10 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { randomBytes } from 'crypto';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import * as bcrypt from 'bcrypt';
-import { Resend } from 'resend';
+import * as nodemailer from 'nodemailer';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
 
@@ -23,36 +25,94 @@ interface JwtPayload {
   role: string;
 }
 
+const LOGO_DATA_URI = (() => {
+  try {
+    const buf = readFileSync(join(process.cwd(), 'assets', 'logo.jpeg'));
+    return `data:image/jpeg;base64,${buf.toString('base64')}`;
+  } catch {
+    return '';
+  }
+})();
+
 @Injectable()
 export class AuthService {
-  private readonly resend: Resend;
+  private readonly mailer: nodemailer.Transporter;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
   ) {
-    this.resend = new Resend(this.config.resendApiKey);
+    this.mailer = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      auth: {
+        user: this.config.smtpUser,
+        pass: this.config.smtpPass,
+      },
+    });
+  }
+
+  private emailShell(body: string): string {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PK Food</title></head>
+<body style="margin:0;padding:0;background:#f4f6f3;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f3;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+
+        <!-- Header -->
+        <tr><td style="background:#1a3830;border-radius:12px 12px 0 0;padding:28px 40px;text-align:center;">
+          ${LOGO_DATA_URI ? `<img src="${LOGO_DATA_URI}" alt="PK Food" style="height:56px;width:auto;display:block;margin:0 auto 12px;mix-blend-mode:screen;" />` : ''}
+          <span style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:0.06em;">PK Food</span>
+          <p style="margin:4px 0 0;font-size:12px;color:#a3c4b8;letter-spacing:0.08em;text-transform:uppercase;">PK Canteen · NRS HQ</p>
+        </td></tr>
+
+        <!-- Body -->
+        <tr><td style="background:#ffffff;padding:40px 40px 32px;border-left:1px solid #e8ede8;border-right:1px solid #e8ede8;">
+          ${body}
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="background:#f0f4f0;border-radius:0 0 12px 12px;border:1px solid #e8ede8;border-top:none;padding:20px 40px;text-align:center;">
+          <p style="margin:0;font-size:12px;color:#888;line-height:1.6;">
+            This email was sent by PK Food, the internal ordering platform for NRS HQ.<br>
+            If you didn't request this, you can safely ignore it.
+          </p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
   }
 
   private async sendVerificationEmail(email: string, token: string): Promise<void> {
     const link = `${this.config.appUrl}/verify-email?token=${token}`;
-    const { error } = await this.resend.emails.send({
-      from: this.config.fromEmail,
+    await this.mailer.sendMail({
+      from: `"PK Food" <${this.config.smtpUser}>`,
       to: email,
       subject: 'Verify your PK Food account',
-      html: `
-        <h2>PK Food — Verify your email</h2>
-        <p>Click the button below to activate your account. The link expires in ${VERIFY_TTL_HOURS} hours.</p>
-        <a href="${link}" style="display:inline-block;padding:12px 24px;background:#316752;color:#fff;text-decoration:none;border-radius:6px;">
-          Verify email
-        </a>
-        <p style="margin-top:16px;color:#666;font-size:12px;">
-          If you didn't create an account, ignore this email.
+      html: this.emailShell(`
+        <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">Verify your email</h1>
+        <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">
+          Welcome to PK Food! Click the button below to activate your account.
+          This link expires in <strong style="color:#374151;">${VERIFY_TTL_HOURS} hours</strong>.
         </p>
-      `,
+        <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding-bottom:28px;">
+          <a href="${link}" style="display:inline-block;padding:14px 36px;background:#316752;color:#ffffff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600;letter-spacing:0.02em;">
+            Verify email address
+          </a>
+        </td></tr></table>
+        <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;border-top:1px solid #f3f4f6;padding-top:20px;">
+          Button not working? Copy and paste this link into your browser:<br>
+          <a href="${link}" style="color:#316752;word-break:break-all;">${link}</a>
+        </p>
+      `),
     });
-    if (error) throw new Error(error.message);
   }
 
   async register(email: string, password: string): Promise<void> {
@@ -161,22 +221,27 @@ export class AuthService {
 
     const link = `${this.config.appUrl}/reset-password?token=${resetToken}`;
 
-    const { error } = await this.resend.emails.send({
-      from: this.config.fromEmail,
+    await this.mailer.sendMail({
+      from: `"PK Food" <${this.config.smtpUser}>`,
       to: email,
       subject: 'Reset your PK Food password',
-      html: `
-        <h2>PK Food — Password reset</h2>
-        <p>Click the button below to set a new password. This link expires in ${RESET_TTL_MINUTES} minutes.</p>
-        <a href="${link}" style="display:inline-block;padding:12px 24px;background:#316752;color:#fff;text-decoration:none;border-radius:6px;">
-          Reset password
-        </a>
-        <p style="margin-top:16px;color:#666;font-size:12px;">
-          If you didn't request this, you can safely ignore this email.
+      html: this.emailShell(`
+        <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">Reset your password</h1>
+        <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">
+          We received a request to reset your password. Click the button below to choose a new one.
+          This link expires in <strong style="color:#374151;">${RESET_TTL_MINUTES} minutes</strong>.
         </p>
-      `,
+        <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding-bottom:28px;">
+          <a href="${link}" style="display:inline-block;padding:14px 36px;background:#316752;color:#ffffff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600;letter-spacing:0.02em;">
+            Reset password
+          </a>
+        </td></tr></table>
+        <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;border-top:1px solid #f3f4f6;padding-top:20px;">
+          Button not working? Copy and paste this link into your browser:<br>
+          <a href="${link}" style="color:#316752;word-break:break-all;">${link}</a>
+        </p>
+      `),
     });
-    if (error) throw new Error(error.message);
   }
 
   async resetPassword(token: string, password: string): Promise<void> {

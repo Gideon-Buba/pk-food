@@ -75,6 +75,22 @@ export class MenuController {
     return { data, message: 'Vendor created' };
   }
 
+  @Patch('vendors/:id')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  async updateVendor(@Param('id') id: string, @Body() body: { name: string }) {
+    const data = await this.menuService.updateVendor(id, body.name);
+    return { data, message: 'Vendor updated' };
+  }
+
+  @Delete('vendors/:id')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  async removeVendor(@Param('id') id: string) {
+    await this.menuService.removeVendor(id);
+    return { data: null, message: 'Vendor deleted' };
+  }
+
   @Get('announcements')
   async findAnnouncements() {
     const data = await this.menuService.findActiveAnnouncements();

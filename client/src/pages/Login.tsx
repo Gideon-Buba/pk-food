@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { jwtDecode } from 'jwt-decode';
 import { Eye, EyeOff, ArrowRight, FlaskConical, UserPlus, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,17 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { api, setToken } from '../api/client';
 import type { ApiResponse } from '../types';
+
+interface JwtPayload { role: string; }
+
+function roleHome(token: string): string {
+  try {
+    const { role } = jwtDecode<JwtPayload>(token);
+    if (role === 'ADMIN')  return '/admin';
+    if (role === 'RUNNER') return '/runner';
+  } catch { /* fall through */ }
+  return '/menu';
+}
 
 const IS_DEV = ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
@@ -64,7 +76,7 @@ export default function Login() {
       if (!isRegister) {
         const { data } = await api.post<ApiResponse<{ token: string }>>('/auth/login', { email, password });
         setToken(data.data.token);
-        navigate('/menu');
+        navigate(roleHome(data.data.token));
       } else {
         await api.post('/auth/register', { email, password });
         setRegistered(true);
@@ -82,7 +94,7 @@ export default function Login() {
     try {
       const { data } = await api.post<ApiResponse<{ token: string }>>(`/auth/dev-token/${devEmail}`);
       setToken(data.data.token);
-      navigate('/menu');
+      navigate(roleHome(data.data.token));
     } catch {
       toast.error('Dev login failed — did you run prisma:seed?');
     } finally {

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Announcement, AnnouncementType, ItemStatus, MenuItem, Vendor } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMenuItemDto } from './dto/create-menu-item.dto';
@@ -90,6 +90,21 @@ export class MenuService {
 
   async createVendor(dto: CreateVendorDto): Promise<Vendor> {
     return this.prisma.vendor.create({ data: { name: dto.name } });
+  }
+
+  async updateVendor(id: string, name: string): Promise<Vendor> {
+    const existing = await this.prisma.vendor.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Vendor not found');
+    return this.prisma.vendor.update({ where: { id }, data: { name } });
+  }
+
+  async removeVendor(id: string): Promise<void> {
+    const existing = await this.prisma.vendor.findUnique({ where: { id }, include: { items: { take: 1 } } });
+    if (!existing) throw new NotFoundException('Vendor not found');
+    if (existing.items.length > 0) {
+      throw new BadRequestException('Remove all menu items from this vendor before deleting it');
+    }
+    await this.prisma.vendor.delete({ where: { id } });
   }
 
   async findActiveAnnouncements(): Promise<Announcement[]> {

@@ -36,12 +36,12 @@ export class ConfigService {
     return this.optional('APP_URL', 'http://localhost:5173');
   }
 
-  get resendApiKey(): string {
-    return this.require('RESEND_API_KEY');
+  get smtpUser(): string {
+    return this.require('SMTP_USER');
   }
 
-  get fromEmail(): string {
-    return this.optional('FROM_EMAIL', 'onboarding@resend.dev');
+  get smtpPass(): string {
+    return this.require('SMTP_PASS');
   }
 
   get paystackSecretKey(): string {

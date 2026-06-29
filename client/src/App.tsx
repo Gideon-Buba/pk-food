@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { jwtDecode } from 'jwt-decode';
 import { Toaster } from 'react-hot-toast';
 import Login from './pages/Login';
 import Menu from './pages/Menu';
@@ -12,6 +13,18 @@ import ProtectedRoute from './components/ProtectedRoute';
 import VerifyEmail from './pages/VerifyEmail';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+
+function RoleHome() {
+  const token = localStorage.getItem('pk_food_token');
+  if (token) {
+    try {
+      const { role } = jwtDecode<{ role: string }>(token);
+      if (role === 'ADMIN')  return <Navigate to="/admin"  replace />;
+      if (role === 'RUNNER') return <Navigate to="/runner" replace />;
+    } catch { /* fall through */ }
+  }
+  return <Navigate to="/menu" replace />;
+}
 
 export default function App() {
   return (
@@ -35,7 +48,7 @@ export default function App() {
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/" element={<Navigate to="/menu" replace />} />
+        <Route path="/" element={<RoleHome />} />
         <Route path="/menu" element={<ProtectedRoute><Menu /></ProtectedRoute>} />
         <Route path="/cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
         <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
