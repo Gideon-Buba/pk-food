@@ -242,6 +242,10 @@ h1, h2, h3, h4, h5, h6 {
 /* ── Responsive page padding ── */
 .page-wrap { max-width: 1200px; margin: 0 auto; padding: 24px; }
 @media (max-width: 640px) { .page-wrap { padding: 16px; } }
+/* Extra bottom padding on mobile/tablet to clear the bottom nav */
+@media (max-width: 1023px) {
+  .page-wrap { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+}
 
 /* ── App header ── */
 .app-header {
@@ -311,4 +315,97 @@ h1, h2, h3, h4, h5, h6 {
   .nav-link-btn { padding: 6px !important; border-radius: var(--radius-md) !important; }
   .nav-cart-btn { padding: 7px 10px; }
   .nav-divider { margin: 0 2px; }
+}
+
+/* ── Bottom navigation bar ── */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: rgba(255,255,255,0.97);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid var(--gray-100);
+  box-shadow: 0 -2px 20px rgba(0,0,0,0.08);
+  z-index: 60;
+  /* safe area for notched phones */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (max-width: 1023px) {
+  .bottom-nav { display: flex; }
+}
+.bottom-nav-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 10px 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--gray-400);
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-ui);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 58px;
+}
+.bottom-nav-tab.active { color: var(--primary); }
+.bottom-nav-tab svg { transition: transform 0.12s; flex-shrink: 0; }
+.bottom-nav-tab.active svg { transform: scale(1.12); }
+/* Active tab pill indicator */
+.bottom-nav-tab.active::before {
+  content: '';
+  display: block;
+  position: absolute;
+  width: 32px; height: 2px;
+  background: var(--primary);
+  border-radius: 0 0 2px 2px;
+  top: 0;
+}
+.bottom-nav-tab { position: relative; }
+
+/* Items that should only show on desktop top nav (hidden on mobile since bottom nav handles them) */
+@media (max-width: 1023px) {
+  .top-nav-desktop-only { display: none !important; }
+}
+
+/* Cart footer sits above the bottom nav on mobile */
+@media (max-width: 1023px) {
+  .cart-footer-sticky {
+    bottom: calc(58px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+/* ── Login page — mobile photo background ── */
+.login-mobile-bg {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+@media (max-width: 1023px) {
+  .login-mobile-bg { display: block; }
+}
+
+/* Form glass card on mobile */
+.login-form-card {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+}
+@media (max-width: 1023px) {
+  .login-form-card {
+    background: rgba(255,255,255,0.94);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-radius: 22px;
+    padding: 28px 22px;
+    box-shadow: 0 12px 48px rgba(0,0,0,0.18);
+  }
 }

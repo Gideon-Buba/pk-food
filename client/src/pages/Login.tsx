@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import { Eye, EyeOff, ArrowRight, FlaskConical, UserPlus, Mail } from 'lucide-react';
@@ -29,10 +29,12 @@ const TEST_ACCOUNTS = [
   { label: 'Runner', email: 'runner@nrs.gov.ng', tw: 'bg-orange-50 text-orange-700 hover:bg-orange-100' },
 ] as const;
 
-const FEATURES = [
-  'Browse the full daily menu',
-  'Pay seamlessly with Paystack',
-  'Track your delivery in real time',
+const CANTEEN_PHOTOS = [
+  '/canteen.png',
+  '/canteen-2.png',
+  '/canteen-3.png',
+  '/canteen-4.png',
+  '/canteen-5.png',
 ];
 
 type Mode = 'login' | 'register';
@@ -41,6 +43,8 @@ export default function Login() {
   const navigate  = useNavigate();
   const [mode, setMode]         = useState<Mode>('login');
   const [email, setEmail]       = useState('');
+  const [name, setName]         = useState('');
+  const [phone, setPhone]       = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm]   = useState('');
   const [showPw, setShowPw]     = useState(false);
@@ -51,7 +55,21 @@ export default function Login() {
   const [resendDone, setResendDone] = useState(false);
   const [devLoading, setDevLoading] = useState<string | null>(null);
 
-  const switchMode = (m: Mode) => { setMode(m); setError(''); setConfirm(''); };
+  const [photoIdx, setPhotoIdx] = useState(0);
+  const slideTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    slideTimer.current = setInterval(() => setPhotoIdx(i => (i + 1) % CANTEEN_PHOTOS.length), 5000);
+    return () => { if (slideTimer.current) clearInterval(slideTimer.current); };
+  }, []);
+
+  const goToPhoto = (i: number) => {
+    if (slideTimer.current) clearInterval(slideTimer.current);
+    setPhotoIdx(i);
+    slideTimer.current = setInterval(() => setPhotoIdx(idx => (idx + 1) % CANTEEN_PHOTOS.length), 5000);
+  };
+
+  const switchMode = (m: Mode) => { setMode(m); setError(''); setConfirm(''); setName(''); setPhone(''); };
 
   const handleResend = async () => {
     setResending(true);
@@ -59,12 +77,12 @@ export default function Login() {
       await api.post('/auth/resend-verification', { email });
       setResendDone(true);
     } catch {
-      // Silently ignore — server never reveals account status
       setResendDone(true);
     } finally {
       setResending(false);
     }
   };
+
   const isRegister = mode === 'register';
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -78,7 +96,7 @@ export default function Login() {
         setToken(data.data.token);
         navigate(roleHome(data.data.token));
       } else {
-        await api.post('/auth/register', { email, password });
+        await api.post('/auth/register', { email, password, name, phone: phone ? `+234${phone}` : undefined });
         setRegistered(true);
       }
     } catch (err: unknown) {
@@ -103,14 +121,58 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex" style={{ background: '#0a1c14' }}>
 
-      {/* ── LEFT: Form panel ─────────────────────────── */}
-      <div className="flex-1 flex flex-col justify-center px-8 py-12 bg-white">
-        <div className="w-full max-w-[380px] mx-auto">
+      {/* ── Mobile-only: full-screen rotating photo background ── */}
+      <div className="login-mobile-bg">
+        {CANTEEN_PHOTOS.map((src, i) => (
+          <div key={src} style={{
+            position: 'absolute', inset: 0,
+            backgroundImage: `url(${src})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center 35%',
+            opacity: i === photoIdx ? 1 : 0,
+            transition: 'opacity 1.2s ease',
+          }} />
+        ))}
+        {/* Gradient overlay — darker at bottom for legibility */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(to bottom, rgba(10,28,20,0.52) 0%, rgba(10,28,20,0.45) 40%, rgba(10,28,20,0.72) 100%)',
+        }} />
+      </div>
 
-          <div className="mb-8">
-            <span className="text-xs font-bold tracking-[0.2em] uppercase text-primary">PK Food</span>
+      {/* ── LEFT: Form panel (full-width on mobile, ~half on desktop) ── */}
+      <div
+        className="flex-1 flex flex-col justify-between lg:justify-center relative z-10 lg:bg-white"
+        style={{ padding: '48px 24px 36px', overflowY: 'auto' }}
+      >
+
+        {/* Mobile hero — above card, hidden on desktop */}
+        <div className="lg:hidden mb-6">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 18 }}>
+            <img src="/logo.jpeg" alt="PK Food" style={{ height: 30, width: 'auto', borderRadius: 6 }}
+              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: 700, letterSpacing: '0.22em', textTransform: 'uppercase', fontFamily: 'var(--font-ui)' }}>
+              PK Food · NRS HQ
+            </span>
+          </div>
+          <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 40, fontWeight: 300, color: '#fff', lineHeight: 1.08, marginBottom: 10 }}>
+            Stay at<br /><span style={{ fontWeight: 600 }}>your desk.</span>
+          </h1>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', lineHeight: 1.65, fontFamily: 'var(--font-ui)', maxWidth: 300 }}>
+            Order from PK Canteen without leaving your floor.
+          </p>
+        </div>
+
+        {/* ── Form card (glass on mobile, plain on desktop) ── */}
+        <div className="login-form-card lg:max-w-[380px]">
+
+          {/* Desktop logo — inside card, hidden on mobile */}
+          <div className="hidden lg:block mb-8">
+            <img src="/logo.jpeg" alt="PK Food" style={{ height: 36, width: 'auto', borderRadius: 6, marginBottom: 10 }}
+              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            <span className="text-xs font-bold tracking-[0.2em] uppercase text-primary">PK Food · NRS HQ</span>
           </div>
 
           {registered ? (
@@ -126,12 +188,8 @@ export default function Login() {
               {resendDone ? (
                 <p className="text-sm text-primary font-medium mb-4">New link sent — check your inbox.</p>
               ) : (
-                <button
-                  type="button"
-                  onClick={handleResend}
-                  disabled={resending}
-                  className="text-sm text-muted-foreground hover:text-primary transition-colors mb-4 flex items-center gap-1.5 mx-auto"
-                >
+                <button type="button" onClick={handleResend} disabled={resending}
+                  className="text-sm text-muted-foreground hover:text-primary transition-colors mb-4 flex items-center gap-1.5 mx-auto">
                   {resending && <span className="spinner" style={{ width: 12, height: 12 }} />}
                   {resending ? 'Sending…' : "Didn't receive it? Resend"}
                 </button>
@@ -144,122 +202,115 @@ export default function Login() {
             <>
               <div className="mb-6">
                 <h1 className="text-2xl font-semibold text-foreground">
-                  {isRegister ? 'Create account' : 'Welcome back'}
+                  {isRegister ? 'Create account' : 'Sign in'}
                 </h1>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {isRegister ? 'Join PK Food with your NRS email' : 'Sign in to your NRS account'}
+                  {isRegister ? 'Join with your NRS work email' : 'Use your NRS work email to continue'}
                 </p>
               </div>
 
-              {/* Mode toggle — sliding blob */}
+              {/* Mode toggle */}
               <div className="relative flex bg-muted rounded-lg p-1 mb-6" style={{ isolation: 'isolate' }}>
-                {/* blob */}
                 <div style={{
-                  position: 'absolute',
-                  top: 4, bottom: 4,
+                  position: 'absolute', top: 4, bottom: 4,
                   left: isRegister ? '50%' : 4,
                   width: 'calc(50% - 4px)',
-                  borderRadius: 6,
-                  background: '#fff',
+                  borderRadius: 6, background: '#fff',
                   boxShadow: '0 1px 4px rgba(0,0,0,0.10), 0 1px 2px rgba(0,0,0,0.06)',
-                  transition: 'left 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
-                  zIndex: 0,
+                  transition: 'left 0.22s cubic-bezier(0.4, 0, 0.2, 1)', zIndex: 0,
                 }} />
-                <button
-                  type="button"
-                  onClick={() => switchMode('login')}
+                <button type="button" onClick={() => switchMode('login')}
                   style={{ position: 'relative', zIndex: 1, transition: 'color 0.2s ease' }}
-                  className={`flex-1 py-2 text-sm font-medium rounded-md ${!isRegister ? 'text-foreground' : 'text-muted-foreground'}`}
-                >
+                  className={`flex-1 py-2 text-sm font-medium rounded-md ${!isRegister ? 'text-foreground' : 'text-muted-foreground'}`}>
                   Sign in
                 </button>
-                <button
-                  type="button"
-                  onClick={() => switchMode('register')}
+                <button type="button" onClick={() => switchMode('register')}
                   style={{ position: 'relative', zIndex: 1, transition: 'color 0.2s ease' }}
-                  className={`flex-1 py-2 text-sm font-medium rounded-md ${isRegister ? 'text-foreground' : 'text-muted-foreground'}`}
-                >
+                  className={`flex-1 py-2 text-sm font-medium rounded-md ${isRegister ? 'text-foreground' : 'text-muted-foreground'}`}>
                   Create account
                 </button>
               </div>
 
-              {/* Single form — confirm field animates in/out, button stays put */}
               <form onSubmit={handleSubmit} className="space-y-4">
+
+                {/* Full name — register only */}
+                <div style={{ display: 'grid', gridTemplateRows: isRegister ? '1fr' : '0fr', transition: 'grid-template-rows 0.25s ease' }}>
+                  <div style={{ overflow: 'hidden' }}>
+                    <div className="space-y-1.5 pb-0.5">
+                      <Label htmlFor="name">Full name</Label>
+                      <Input id="name" type="text" placeholder="e.g. Gideon Buba"
+                        value={name} onChange={e => setName(e.target.value)}
+                        required={isRegister} tabIndex={isRegister ? 0 : -1} />
+                    </div>
+                  </div>
+                </div>
+
                 <div className="space-y-1.5">
                   <Label htmlFor="email">Work email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="you@nrs.gov.ng"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    required
-                    autoFocus
-                  />
+                  <Input id="email" type="email" placeholder="you@nrs.gov.ng"
+                    value={email} onChange={e => setEmail(e.target.value)} required autoFocus />
                 </div>
 
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="password">Password</Label>
-                    <Link to="/forgot-password" className="text-xs text-muted-foreground hover:text-primary transition-colors">
-                      Forgot password?
-                    </Link>
+                    {!isRegister && (
+                      <Link to="/forgot-password" className="text-xs text-muted-foreground hover:text-primary transition-colors">
+                        Forgot password?
+                      </Link>
+                    )}
                   </div>
                   <div className="relative">
-                    <Input
-                      id="password"
-                      type={showPw ? 'text' : 'password'}
+                    <Input id="password" type={showPw ? 'text' : 'password'}
                       placeholder={isRegister ? 'Min. 8 characters' : 'Your password'}
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      required
-                      minLength={isRegister ? 8 : undefined}
-                      className="pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPw(v => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    >
+                      value={password} onChange={e => setPassword(e.target.value)}
+                      required minLength={isRegister ? 8 : undefined} className="pr-10" />
+                    <button type="button" onClick={() => setShowPw(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
                       {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
                   </div>
                 </div>
 
-                {/* Confirm password — slides in/out without moving button */}
-                <div style={{
-                  display: 'grid',
-                  gridTemplateRows: isRegister ? '1fr' : '0fr',
-                  transition: 'grid-template-rows 0.25s ease',
-                }}>
+                {/* Confirm password — register only */}
+                <div style={{ display: 'grid', gridTemplateRows: isRegister ? '1fr' : '0fr', transition: 'grid-template-rows 0.25s ease' }}>
                   <div style={{ overflow: 'hidden' }}>
                     <div className="space-y-1.5 pb-0.5">
                       <Label htmlFor="confirm">Confirm password</Label>
-                      <Input
-                        id="confirm"
-                        type={showPw ? 'text' : 'password'}
-                        placeholder="Repeat password"
-                        value={confirm}
-                        onChange={e => setConfirm(e.target.value)}
-                        required={isRegister}
-                        tabIndex={isRegister ? 0 : -1}
-                      />
+                      <Input id="confirm" type={showPw ? 'text' : 'password'} placeholder="Repeat password"
+                        value={confirm} onChange={e => setConfirm(e.target.value)}
+                        required={isRegister} tabIndex={isRegister ? 0 : -1} />
                     </div>
                   </div>
                 </div>
 
-                {/* Error — fixed height slot so button doesn't jump */}
+                {/* Phone — register only */}
+                <div style={{ display: 'grid', gridTemplateRows: isRegister ? '1fr' : '0fr', transition: 'grid-template-rows 0.25s ease' }}>
+                  <div style={{ overflow: 'hidden' }}>
+                    <div className="space-y-1.5 pb-0.5">
+                      <Label htmlFor="phone">
+                        Phone <span className="text-muted-foreground font-normal text-xs">(optional)</span>
+                      </Label>
+                      <div className="flex">
+                        <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-sm text-muted-foreground select-none">
+                          +234
+                        </span>
+                        <Input id="phone" type="tel" placeholder="8012345678"
+                          value={phone}
+                          onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                          tabIndex={isRegister ? 0 : -1} className="rounded-l-none" maxLength={10} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <div style={{ minHeight: 20 }}>
                   {error && <p className="text-xs text-destructive">{error}</p>}
                 </div>
 
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading
-                    ? <span className="spinner" style={{ width: 15, height: 15 }} />
-                    : isRegister ? <UserPlus size={15} /> : <ArrowRight size={15} />}
-                  {loading
-                    ? (isRegister ? 'Creating account…' : 'Signing in…')
-                    : isRegister ? 'Create account' : 'Sign in'}
+                  {loading ? <span className="spinner" style={{ width: 15, height: 15 }} /> : isRegister ? <UserPlus size={15} /> : <ArrowRight size={15} />}
+                  {loading ? (isRegister ? 'Creating account…' : 'Signing in…') : isRegister ? 'Create account' : 'Sign in'}
                 </Button>
               </form>
 
@@ -278,13 +329,9 @@ export default function Login() {
                   </div>
                   <div className="flex gap-2">
                     {TEST_ACCOUNTS.map(acc => (
-                      <button
-                        key={acc.email}
-                        type="button"
-                        onClick={() => handleDevLogin(acc.email)}
+                      <button key={acc.email} type="button" onClick={() => handleDevLogin(acc.email)}
                         disabled={devLoading !== null}
-                        className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 ${acc.tw}`}
-                      >
+                        className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 ${acc.tw}`}>
                         {devLoading === acc.email && <span className="spinner" style={{ width: 10, height: 10 }} />}
                         {acc.label}
                       </button>
@@ -295,45 +342,70 @@ export default function Login() {
             </>
           )}
         </div>
+
+        {/* Mobile: photo dots — below card, hidden on desktop */}
+        <div className="lg:hidden flex items-center justify-center gap-2 mt-8">
+          {CANTEEN_PHOTOS.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => goToPhoto(i)}
+              style={{
+                width: i === photoIdx ? 22 : 6,
+                height: 6, borderRadius: 3,
+                border: 'none', cursor: 'pointer', padding: 0,
+                background: i === photoIdx ? '#fff' : 'rgba(255,255,255,0.35)',
+                transition: 'all 0.35s ease',
+              }}
+            />
+          ))}
+        </div>
       </div>
 
-      {/* ── RIGHT: Brand panel ───────────────────────── */}
-      <div className="hidden lg:flex w-[480px] bg-primary-darker flex-col justify-center p-14 relative overflow-hidden">
-        <div className="absolute -top-24 -right-24 w-80 h-80 rounded-full bg-white/5 pointer-events-none" />
-        <div className="absolute -bottom-16 -left-16 w-64 h-64 rounded-full bg-white/[0.03] pointer-events-none" />
-
-        <div className="relative">
-          <div className="mb-10 inline-block bg-white/10 rounded-xl p-4">
-            <img
-              src="/logo.jpeg"
-              alt="PK Limited"
-              style={{ height: 72, width: 'auto', mixBlendMode: 'screen' }}
-              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
+      {/* ── RIGHT: Canteen photo panel (desktop only) ── */}
+      <div className="hidden lg:block" style={{ width: 520, position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
+        {CANTEEN_PHOTOS.map((src, i) => (
+          <div key={src} style={{
+            position: 'absolute', inset: 0,
+            backgroundImage: `url(${src})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center 35%',
+            opacity: i === photoIdx ? 1 : 0,
+            transition: 'opacity 1.2s ease',
+          }} />
+        ))}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(to top, rgba(10,28,20,0.96) 0%, rgba(10,28,20,0.55) 45%, rgba(10,28,20,0.2) 100%)',
+        }} />
+        <div style={{ position: 'relative', zIndex: 1, height: '100%', display: 'flex', flexDirection: 'column', padding: '40px 48px' }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 10,
+            background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(8px)',
+            borderRadius: 10, padding: '8px 14px', alignSelf: 'flex-start',
+          }}>
+            <img src="/logo.jpeg" alt="PK" style={{ height: 28, width: 'auto', borderRadius: 4 }}
+              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            <span style={{ color: '#fff', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-ui)', letterSpacing: '0.04em' }}>PK Food</span>
           </div>
-
-          <h1
-            className="text-5xl font-light text-white mb-4 leading-tight"
-            style={{ fontFamily: 'var(--font-heading)', letterSpacing: '0.04em' }}
-          >
-            PK Food
-          </h1>
-          <p className="text-white/70 text-[15px] leading-relaxed mb-10" style={{ fontFamily: 'var(--font-ui)' }}>
-            Order fresh meals from PK Canteen and have them delivered right to your floor — no queues, no hassle.
-          </p>
-
-          <ul className="space-y-4">
-            {FEATURES.map(f => (
-              <li key={f} className="flex items-center gap-3">
-                <div className="w-5 h-5 rounded-full bg-white/15 flex items-center justify-center flex-shrink-0">
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                    <path d="M2 5l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <span className="text-white/80 text-sm">{f}</span>
-              </li>
-            ))}
-          </ul>
+          <div style={{ flex: 1 }} />
+          <div>
+            <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 46, fontWeight: 300, color: '#fff', lineHeight: 1.1, letterSpacing: '0.01em', marginBottom: 18 }}>
+              Stay at<br /><span style={{ fontWeight: 600 }}>your desk.</span>
+            </h1>
+            <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1.75, fontFamily: 'var(--font-ui)', maxWidth: 360 }}>
+              PK Canteen is right here in the building — and now it comes to you. No more leaving your floor, no queue, no wasted time. Order in seconds, eat where you work.
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 32 }}>
+              {CANTEEN_PHOTOS.map((_, i) => (
+                <button key={i} onClick={() => goToPhoto(i)} style={{
+                  width: i === photoIdx ? 24 : 6, height: 6,
+                  borderRadius: 3, border: 'none', cursor: 'pointer', padding: 0,
+                  background: i === photoIdx ? '#fff' : 'rgba(255,255,255,0.3)',
+                  transition: 'all 0.35s ease',
+                }} />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
