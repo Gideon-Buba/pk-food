@@ -115,7 +115,7 @@ export class AuthService {
     });
   }
 
-  async register(email: string, password: string): Promise<void> {
+  async register(email: string, password: string, name: string, phone?: string): Promise<void> {
     const domain = email.split('@')[1];
     if (domain !== ALLOWED_DOMAIN) {
       throw new BadRequestException(
@@ -136,11 +136,11 @@ export class AuthService {
       // Unverified account — refresh token and resend
       await this.prisma.user.update({
         where: { email },
-        data: { password: hashed, verifyToken, verifyTokenExpiry },
+        data: { password: hashed, verifyToken, verifyTokenExpiry, name, phone },
       });
     } else {
       await this.prisma.user.create({
-        data: { email, password: hashed, verifyToken, verifyTokenExpiry },
+        data: { email, password: hashed, verifyToken, verifyTokenExpiry, name, phone },
       });
     }
 
@@ -258,6 +258,23 @@ export class AuthService {
     await this.prisma.user.update({
       where: { id: user.id },
       data: { password: hashed, resetToken: null, resetTokenExpiry: null },
+    });
+  }
+
+  async getProfile(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, name: true, phone: true, role: true, floor: true, officeNumber: true, createdAt: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    return user;
+  }
+
+  async updateProfile(userId: string, name: string, phone?: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { name, phone: phone ?? null },
+      select: { id: true, email: true, name: true, phone: true, role: true, floor: true, officeNumber: true },
     });
   }
 

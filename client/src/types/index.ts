@@ -13,9 +13,11 @@ export type AnnouncementType = 'STATUS' | 'GENERAL';
 export interface User {
   id: string;
   email: string;
+  name?: string | null;
+  phone?: string | null;
   role: Role;
-  floor?: string;
-  officeNumber?: string;
+  floor?: string | null;
+  officeNumber?: string | null;
 }
 
 export interface Vendor {

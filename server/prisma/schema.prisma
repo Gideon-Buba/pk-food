@@ -43,6 +43,8 @@ model User {
   verifyTokenExpiry DateTime?
   resetToken        String?   @unique
   resetTokenExpiry  DateTime?
+  name              String?
+  phone             String?
   role              Role      @default(STAFF)
   floor             String?
   officeNumber      String?

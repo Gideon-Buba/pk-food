@@ -1,9 +1,13 @@
-import { Controller, Post, Get, Body, Query, Param } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Query, Param, UseGuards } from '@nestjs/common';
+import { User } from '@prisma/client';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -13,7 +17,7 @@ export class AuthController {
   async register(
     @Body() dto: RegisterDto,
   ): Promise<{ data: null; message: string }> {
-    await this.authService.register(dto.email, dto.password);
+    await this.authService.register(dto.email, dto.password, dto.name, dto.phone);
     return { data: null, message: 'Account created — check your email to verify' };
   }
 
@@ -55,6 +59,20 @@ export class AuthController {
   ): Promise<{ data: null; message: string }> {
     await this.authService.resetPassword(dto.token, dto.password);
     return { data: null, message: 'Password updated — you can now sign in' };
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  async getProfile(@CurrentUser() user: User) {
+    const data = await this.authService.getProfile(user.id);
+    return { data, message: 'OK' };
+  }
+
+  @Patch('profile')
+  @UseGuards(JwtAuthGuard)
+  async updateProfile(@CurrentUser() user: User, @Body() dto: UpdateProfileDto) {
+    const data = await this.authService.updateProfile(user.id, dto.name, dto.phone);
+    return { data, message: 'Profile updated' };
   }
 
   @Post('dev-token/:email')
