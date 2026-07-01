@@ -1,4 +1,8 @@
 export type Role = 'STAFF' | 'ADMIN' | 'RUNNER';
+export type Floor =
+  | 'GF'
+  | 'F1' | 'F2' | 'F3' | 'F4' | 'F5' | 'F6' | 'F7' | 'F8'
+  | 'F9' | 'F10' | 'F11' | 'F12' | 'F13' | 'F14' | 'F15' | 'F16';
 export type ItemStatus = 'AVAILABLE' | 'UNAVAILABLE' | 'OUT_OF_STOCK';
 export type OrderStatus =
   | 'PENDING'
@@ -16,7 +20,7 @@ export interface User {
   name?: string | null;
   phone?: string | null;
   role: Role;
-  floor?: string | null;
+  floor?: Floor | null;
   officeNumber?: string | null;
 }
 

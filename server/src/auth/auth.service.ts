@@ -14,6 +14,7 @@ import * as bcrypt from 'bcrypt';
 import * as nodemailer from 'nodemailer';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
+import { Floor } from '@prisma/client';
 
 const ALLOWED_DOMAIN = 'nrs.gov.ng';
 const VERIFY_TTL_HOURS = 24;
@@ -270,10 +271,21 @@ export class AuthService {
     return user;
   }
 
-  async updateProfile(userId: string, name: string, phone?: string) {
+  async updateProfile(
+    userId: string,
+    name: string,
+    phone?: string,
+    floor?: Floor,
+    officeNumber?: string,
+  ) {
     return this.prisma.user.update({
       where: { id: userId },
-      data: { name, phone: phone ?? null },
+      data: {
+        name,
+        phone: phone ?? null,
+        floor: floor ?? null,
+        officeNumber: officeNumber ?? null,
+      },
       select: { id: true, email: true, name: true, phone: true, role: true, floor: true, officeNumber: true },
     });
   }

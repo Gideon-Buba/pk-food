@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsEnum,
   IsInt,
   IsNotEmpty,
   IsPositive,
@@ -8,6 +9,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { Floor } from '@prisma/client';
 
 export class CreateOrderItemDto {
   @IsString()
@@ -25,9 +27,8 @@ export class CreateOrderDto {
   @Type(() => CreateOrderItemDto)
   items!: CreateOrderItemDto[];
 
-  @IsString()
-  @IsNotEmpty()
-  floor!: string;
+  @IsEnum(Floor, { message: 'Select a valid floor (GF or F1–F16)' })
+  floor!: Floor;
 
   @IsString()
   @IsNotEmpty()

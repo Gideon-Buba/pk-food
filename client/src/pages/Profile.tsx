@@ -1,21 +1,25 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Lock, Phone, User as UserIcon, ClipboardList, LogOut, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Building2, Lock, Phone, User as UserIcon, ClipboardList, LogOut, ChevronRight } from 'lucide-react';
 import { clearToken } from '../api/client';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '../api/client';
+import { FLOORS } from '../constants/floors';
+import type { FloorValue } from '../constants/floors';
 import type { ApiResponse, User } from '../types';
 
 export default function Profile() {
   const navigate = useNavigate();
   const [user, setUser]     = useState<User | null>(null);
-  const [name, setName]     = useState('');
-  const [phone, setPhone]   = useState('');
-  const [loading, setLoading]   = useState(true);
-  const [saving, setSaving]     = useState(false);
+  const [name, setName]           = useState('');
+  const [phone, setPhone]         = useState('');
+  const [floor, setFloor]         = useState<FloorValue | ''>('');
+  const [officeNumber, setOffice] = useState('');
+  const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(false);
 
   useEffect(() => {
     api.get<ApiResponse<User>>('/auth/me')
@@ -23,8 +27,9 @@ export default function Profile() {
         const u = r.data.data;
         setUser(u);
         setName(u.name ?? '');
-        // strip +234 prefix for the input field
         setPhone(u.phone ? u.phone.replace(/^\+234/, '') : '');
+        setFloor((u.floor as FloorValue | undefined) ?? '');
+        setOffice(u.officeNumber ?? '');
       })
       .catch(() => toast.error('Could not load profile'))
       .finally(() => setLoading(false));
@@ -37,6 +42,8 @@ export default function Profile() {
       await api.patch('/auth/profile', {
         name,
         phone: phone ? `+234${phone}` : undefined,
+        floor: floor || undefined,
+        officeNumber: officeNumber || undefined,
       });
       toast.success('Profile saved');
     } catch (err: unknown) {
@@ -133,6 +140,38 @@ export default function Profile() {
                       style={{ borderRadius: '0 6px 6px 0' }}
                     />
                   </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <Label htmlFor="floor" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Building2 size={13} /> Floor <span style={{ fontWeight: 400, color: 'var(--gray-400)', fontSize: 12 }}>(for delivery)</span>
+                  </Label>
+                  <select
+                    id="floor"
+                    className="input"
+                    value={floor}
+                    onChange={e => setFloor(e.target.value as FloorValue)}
+                  >
+                    <option value="">Select floor</option>
+                    {FLOORS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <Label htmlFor="office" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    Wing / Office <span style={{ fontWeight: 400, color: 'var(--gray-400)', fontSize: 12 }}>(optional)</span>
+                  </Label>
+                  <select
+                    id="office"
+                    className="input"
+                    value={officeNumber}
+                    onChange={e => setOffice(e.target.value)}
+                  >
+                    <option value="">Select wing</option>
+                    <option value="A">Wing A</option>
+                    <option value="B">Wing B</option>
+                    <option value="C">Wing C</option>
+                  </select>
                 </div>
 
                 <Button type="submit" className="w-full" disabled={saving}>

@@ -71,7 +71,7 @@ export class AuthController {
   @Patch('profile')
   @UseGuards(JwtAuthGuard)
   async updateProfile(@CurrentUser() user: User, @Body() dto: UpdateProfileDto) {
-    const data = await this.authService.updateProfile(user.id, dto.name, dto.phone);
+    const data = await this.authService.updateProfile(user.id, dto.name, dto.phone, dto.floor, dto.officeNumber);
     return { data, message: 'Profile updated' };
   }
 

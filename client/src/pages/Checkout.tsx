@@ -4,6 +4,8 @@ import { ChevronLeft, CreditCard, MapPin, Phone } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
 import { useCartStore } from '../store/cart';
+import { FLOORS } from '../constants/floors';
+import type { FloorValue } from '../constants/floors';
 import type { ApiResponse, Order } from '../types';
 
 const DELIVERY_FEE = Number(import.meta.env.VITE_DELIVERY_FEE ?? 300);
@@ -13,7 +15,7 @@ interface PaystackInitData { authorization_url: string; reference: string; }
 export default function Checkout() {
   const navigate = useNavigate();
   const { items, itemsTotal, clearCart } = useCartStore();
-  const [floor, setFloor] = useState('');
+  const [floor, setFloor] = useState<FloorValue | ''>('');
   const [officeNumber, setOfficeNumber] = useState('');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
@@ -63,8 +65,11 @@ export default function Checkout() {
             </div>
             <form onSubmit={handleCheckout} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div className="form-group">
-                <label className="label" htmlFor="floor">Floor / Level</label>
-                <input id="floor" className="input" placeholder="e.g. 3rd Floor" value={floor} onChange={e => setFloor(e.target.value)} required />
+                <label className="label" htmlFor="floor">Floor</label>
+                <select id="floor" className="input" value={floor} onChange={e => setFloor(e.target.value as FloorValue)} required>
+                  <option value="">Select floor</option>
+                  {FLOORS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                </select>
               </div>
               <div className="form-group">
                 <label className="label" htmlFor="office">Wing</label>
