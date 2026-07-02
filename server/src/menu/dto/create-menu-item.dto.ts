@@ -8,7 +8,7 @@ import {
   IsString,
   Min,
 } from 'class-validator';
-import { ItemStatus } from '@prisma/client';
+import { FoodCategory, ItemStatus } from '@prisma/client';
 
 export class CreateMenuItemDto {
   @IsString()
@@ -38,4 +38,8 @@ export class CreateMenuItemDto {
   @IsEnum(ItemStatus)
   @IsOptional()
   status?: ItemStatus;
+
+  @IsEnum(FoodCategory)
+  @IsOptional()
+  category?: FoodCategory;
 }

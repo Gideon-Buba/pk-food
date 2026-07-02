@@ -1,12 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Announcement, AnnouncementType, ItemStatus, MenuItem, Vendor } from '@prisma/client';
+import { Announcement, AnnouncementType, FoodCategory, ItemStatus, MenuItem, Vendor } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMenuItemDto } from './dto/create-menu-item.dto';
 import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
 import { CreateVendorDto } from './dto/create-vendor.dto';
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
 
-type MenuItemWithVendor = MenuItem & { vendor: Vendor };
+type MenuItemWithVendor = MenuItem & { vendor: Vendor; category: FoodCategory | null };
 type SerializedMenuItem = Omit<MenuItemWithVendor, 'price'> & { price: number };
 
 function serializeItem(item: MenuItemWithVendor): SerializedMenuItem {
@@ -51,6 +51,7 @@ export class MenuService {
         totalStock: dto.totalStock,
         onlineStock: dto.onlineStock,
         status: dto.status ?? ItemStatus.AVAILABLE,
+        category: dto.category ?? null,
       },
       include: { vendor: true },
     });
@@ -73,6 +74,7 @@ export class MenuService {
         ...(dto.totalStock !== undefined && { totalStock: dto.totalStock }),
         ...(dto.onlineStock !== undefined && { onlineStock: dto.onlineStock }),
         ...(dto.status !== undefined && { status: dto.status }),
+        ...(dto.category !== undefined && { category: dto.category }),
       },
       include: { vendor: true },
     });

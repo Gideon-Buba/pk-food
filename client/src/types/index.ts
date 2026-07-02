@@ -4,6 +4,7 @@ export type Floor =
   | 'F1' | 'F2' | 'F3' | 'F4' | 'F5' | 'F6' | 'F7' | 'F8'
   | 'F9' | 'F10' | 'F11' | 'F12' | 'F13' | 'F14' | 'F15' | 'F16';
 export type ItemStatus = 'AVAILABLE' | 'UNAVAILABLE' | 'OUT_OF_STOCK';
+export type FoodCategory = 'RICE' | 'SWALLOW' | 'PROTEIN' | 'SIDES' | 'PASTA' | 'PASTRIES' | 'BUFFET';
 export type OrderStatus =
   | 'PENDING'
   | 'CONFIRMED'
@@ -39,6 +40,7 @@ export interface MenuItem {
   totalStock: number;
   onlineStock: number;
   status: ItemStatus;
+  category?: FoodCategory | null;
 }
 
 export interface OrderItem {

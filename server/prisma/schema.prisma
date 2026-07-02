@@ -34,6 +34,16 @@ enum AnnouncementType {
   GENERAL
 }
 
+enum FoodCategory {
+  RICE
+  SWALLOW
+  PROTEIN
+  SIDES
+  PASTA
+  PASTRIES
+  BUFFET
+}
+
 enum Floor {
   GF
   F1
@@ -92,9 +102,10 @@ model MenuItem {
   image       String?
   vendorId    String
   vendor      Vendor      @relation(fields: [vendorId], references: [id])
-  totalStock  Int         @default(0)
-  onlineStock Int         @default(0)
-  status      ItemStatus  @default(AVAILABLE)
+  totalStock  Int          @default(0)
+  onlineStock Int          @default(0)
+  status      ItemStatus   @default(AVAILABLE)
+  category    FoodCategory?
   orderItems  OrderItem[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt

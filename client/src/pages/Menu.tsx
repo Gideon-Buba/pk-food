@@ -8,7 +8,88 @@ import {
 import toast from 'react-hot-toast';
 import { api, clearToken, getToken } from '../api/client';
 import { useCartStore } from '../store/cart';
-import type { ApiResponse, Announcement, JwtPayload, MenuItem } from '../types';
+import { CATEGORY_META, CATEGORY_ORDER } from '../constants/categories';
+import type { ApiResponse, Announcement, FoodCategory, JwtPayload, MenuItem } from '../types';
+
+interface ItemCardProps {
+  item: MenuItem;
+  index: number;
+  cartItem: { quantity: number } | undefined;
+  onAdd: (item: MenuItem) => void;
+  onUpdate: (id: string, qty: number) => void;
+}
+
+function ItemCard({ item, index, cartItem, onAdd, onUpdate }: ItemCardProps) {
+  const available = item.status === 'AVAILABLE';
+  return (
+    <div
+      className="fade-up"
+      style={{
+        background: '#fff', borderRadius: 16, overflow: 'hidden',
+        boxShadow: '0 2px 12px rgba(0,0,0,0.07)', border: '1px solid var(--gray-100)',
+        display: 'flex', flexDirection: 'column',
+        transition: 'box-shadow 0.2s ease, transform 0.2s ease',
+        animationDelay: `${index * 25}ms`,
+        opacity: available ? 1 : 0.72,
+      }}
+      onMouseEnter={e => { if (available) { (e.currentTarget as HTMLDivElement).style.boxShadow = '0 8px 28px rgba(0,0,0,0.13)'; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-3px)'; } }}
+      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 12px rgba(0,0,0,0.07)'; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; }}
+    >
+      <div style={{ position: 'relative', aspectRatio: '4/3', background: 'var(--gray-100)', overflow: 'hidden' }}>
+        {item.image ? (
+          <img src={item.image} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        ) : (
+          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--primary-subtle)' }}>
+            <UtensilsCrossed size={36} color="var(--primary-light)" />
+          </div>
+        )}
+        <div style={{ position: 'absolute', bottom: 8, left: 8, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', color: '#fff', borderRadius: 20, padding: '3px 9px', fontSize: 10, fontWeight: 600, fontFamily: 'var(--font-ui)', letterSpacing: '0.04em' }}>
+          {item.vendor.name}
+        </div>
+        {cartItem && (
+          <div style={{ position: 'absolute', top: 8, right: 8, background: 'var(--primary)', color: '#fff', borderRadius: 20, padding: '3px 9px', fontSize: 10, fontWeight: 700 }}>
+            {cartItem.quantity} in cart
+          </div>
+        )}
+        {!available && (
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.38)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ background: 'rgba(0,0,0,0.65)', color: '#fff', borderRadius: 20, padding: '5px 14px', fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-ui)', backdropFilter: 'blur(4px)' }}>
+              {item.status === 'OUT_OF_STOCK' ? 'Sold out' : 'Unavailable'}
+            </span>
+          </div>
+        )}
+      </div>
+      <div style={{ padding: '12px 14px 14px', display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+        <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-900)', lineHeight: 1.35, margin: 0 }}>
+          {item.name}
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 'auto' }}>
+          <span style={{ fontSize: 17, fontWeight: 800, color: 'var(--primary)', fontFamily: 'var(--font-display)', letterSpacing: '-0.02em' }}>
+            &#8358;{Number(item.price).toLocaleString()}
+          </span>
+          {cartItem ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button className="qty-btn" onClick={() => onUpdate(item.id, cartItem.quantity - 1)}><Minus size={12} /></button>
+              <span style={{ fontSize: 14, fontWeight: 700, minWidth: 20, textAlign: 'center' }}>{cartItem.quantity}</span>
+              <button className="qty-btn" onClick={() => onUpdate(item.id, cartItem.quantity + 1)}><Plus size={12} /></button>
+            </div>
+          ) : (
+            <button
+              disabled={!available}
+              onClick={() => onAdd(item)}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 20, background: available ? 'var(--primary)' : 'var(--gray-200)', color: available ? '#fff' : 'var(--gray-400)', border: 'none', cursor: available ? 'pointer' : 'not-allowed', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-ui)', transition: 'background 0.15s, transform 0.1s' }}
+              onMouseEnter={e => { if (available) (e.currentTarget as HTMLButtonElement).style.background = 'var(--primary-dark)'; }}
+              onMouseLeave={e => { if (available) (e.currentTarget as HTMLButtonElement).style.background = 'var(--primary)'; }}
+            >
+              <Plus size={13} />
+              Add
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function greeting() {
   const h = new Date().getHours();
@@ -27,6 +108,7 @@ export default function Menu() {
   const [loading, setLoading]           = useState(true);
   const [search, setSearch]             = useState('');
   const [activeVendor, setActiveVendor] = useState<string>('all');
+  const [activeCategory, setActiveCategory] = useState<FoodCategory | 'all'>('all');
   const [userName, setUserName]         = useState<string>('');
   const navigate = useNavigate();
   const { items: cartItems, addItem, updateQuantity, itemCount } = useCartStore();
@@ -54,13 +136,36 @@ export default function Menu() {
 
   const vendorNames = Array.from(new Set(items.map(i => i.vendor.name)));
 
-  const filtered = items.filter(item => {
-    const matchVendor = activeVendor === 'all' || item.vendor.name === activeVendor;
+  // Only show category tabs that actually have items (after vendor filter)
+  const vendorFiltered = items.filter(item => activeVendor === 'all' || item.vendor.name === activeVendor);
+  const availableCategories = CATEGORY_ORDER.filter(cat => vendorFiltered.some(i => i.category === cat));
+
+  const filtered = vendorFiltered.filter(item => {
+    const matchCategory = activeCategory === 'all' || item.category === activeCategory;
     const matchSearch = item.name.toLowerCase().includes(search.toLowerCase());
-    return matchVendor && matchSearch;
+    return matchCategory && matchSearch;
   });
 
   const getCartItem = (id: string) => cartItems.find(i => i.menuItem.id === id);
+
+  // Group by category; only when viewing all categories and not searching
+  const hasCategories = filtered.some(i => i.category != null);
+  const showGrouped = !search && hasCategories && activeCategory === 'all';
+  const grouped: { category: FoodCategory | null; items: MenuItem[] }[] = [];
+  if (showGrouped) {
+    const byCategory = new Map<FoodCategory | null, MenuItem[]>();
+    for (const item of filtered) {
+      const cat = item.category ?? null;
+      if (!byCategory.has(cat)) byCategory.set(cat, []);
+      byCategory.get(cat)!.push(item);
+    }
+    for (const cat of CATEGORY_ORDER) {
+      const catItems = byCategory.get(cat);
+      if (catItems?.length) grouped.push({ category: cat, items: catItems });
+    }
+    const uncategorized = byCategory.get(null);
+    if (uncategorized?.length) grouped.push({ category: null, items: uncategorized });
+  }
 
   const handleAdd = (item: MenuItem) => {
     addItem(item);
@@ -278,10 +383,10 @@ export default function Menu() {
         )}
 
         {/* ── Vendor tabs ─────────────────────────────────── */}
-        <div className="vendor-tabs" style={{ marginBottom: 20 }}>
+        <div className="vendor-tabs" style={{ marginBottom: availableCategories.length > 0 ? 10 : 20 }}>
           <button
             className={`vendor-tab ${activeVendor === 'all' ? 'active' : ''}`}
-            onClick={() => setActiveVendor('all')}
+            onClick={() => { setActiveVendor('all'); setActiveCategory('all'); }}
           >
             All items
           </button>
@@ -289,12 +394,47 @@ export default function Menu() {
             <button
               key={v}
               className={`vendor-tab ${activeVendor === v ? 'active' : ''}`}
-              onClick={() => setActiveVendor(v)}
+              onClick={() => { setActiveVendor(v); setActiveCategory('all'); }}
             >
               {v}
             </button>
           ))}
         </div>
+
+        {/* ── Category filter pills ────────────────────────── */}
+        {availableCategories.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 20, scrollbarWidth: 'none' }}>
+            <button
+              onClick={() => setActiveCategory('all')}
+              style={{
+                flexShrink: 0, padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600,
+                border: '1.5px solid', cursor: 'pointer', transition: 'all 0.15s',
+                fontFamily: 'var(--font-ui)',
+                background: activeCategory === 'all' ? 'var(--primary)' : 'transparent',
+                borderColor: activeCategory === 'all' ? 'var(--primary)' : 'var(--gray-200)',
+                color: activeCategory === 'all' ? '#fff' : 'var(--gray-600)',
+              }}
+            >
+              All
+            </button>
+            {availableCategories.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                style={{
+                  flexShrink: 0, padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600,
+                  border: '1.5px solid', cursor: 'pointer', transition: 'all 0.15s',
+                  fontFamily: 'var(--font-ui)',
+                  background: activeCategory === cat ? 'var(--primary)' : 'transparent',
+                  borderColor: activeCategory === cat ? 'var(--primary)' : 'var(--gray-200)',
+                  color: activeCategory === cat ? '#fff' : 'var(--gray-600)',
+                }}
+              >
+                {CATEGORY_META[cat].label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* ── Menu grid ─────────────────────────────────── */}
         {loading ? (
@@ -317,141 +457,26 @@ export default function Menu() {
             <p>{search ? `No results for "${search}"` : 'No items available right now'}</p>
             {search && <button className="btn btn-secondary btn-sm" onClick={() => setSearch('')}>Clear search</button>}
           </div>
-        ) : (
+        ) : !showGrouped ? (
           <div className="food-grid">
-            {filtered.map((item, i) => {
-              const cartItem = getCartItem(item.id);
-              const available = item.status === 'AVAILABLE';
-              return (
-                <div
-                  key={item.id}
-                  className="fade-up"
-                  style={{
-                    background: '#fff',
-                    borderRadius: 16,
-                    overflow: 'hidden',
-                    boxShadow: '0 2px 12px rgba(0,0,0,0.07)',
-                    border: '1px solid var(--gray-100)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    transition: 'box-shadow 0.2s ease, transform 0.2s ease',
-                    animationDelay: `${i * 25}ms`,
-                    opacity: available ? 1 : 0.72,
-                  }}
-                  onMouseEnter={e => { if (available) { (e.currentTarget as HTMLDivElement).style.boxShadow = '0 8px 28px rgba(0,0,0,0.13)'; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-3px)'; } }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 12px rgba(0,0,0,0.07)'; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; }}
-                >
-                  {/* Image */}
-                  <div style={{ position: 'relative', aspectRatio: '4/3', background: 'var(--gray-100)', overflow: 'hidden' }}>
-                    {item.image ? (
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                      />
-                    ) : (
-                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--primary-subtle)' }}>
-                        <UtensilsCrossed size={36} color="var(--primary-light)" />
-                      </div>
-                    )}
-
-                    {/* Vendor badge — bottom left of image */}
-                    <div style={{
-                      position: 'absolute', bottom: 8, left: 8,
-                      background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
-                      color: '#fff', borderRadius: 20, padding: '3px 9px',
-                      fontSize: 10, fontWeight: 600, fontFamily: 'var(--font-ui)',
-                      letterSpacing: '0.04em',
-                    }}>
-                      {item.vendor.name}
-                    </div>
-
-                    {/* In-cart badge — top right */}
-                    {cartItem && (
-                      <div style={{
-                        position: 'absolute', top: 8, right: 8,
-                        background: 'var(--primary)', color: '#fff',
-                        borderRadius: 20, padding: '3px 9px',
-                        fontSize: 10, fontWeight: 700,
-                      }}>
-                        {cartItem.quantity} in cart
-                      </div>
-                    )}
-
-                    {/* Unavailable overlay */}
-                    {!available && (
-                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.38)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{
-                          background: 'rgba(0,0,0,0.65)', color: '#fff', borderRadius: 20,
-                          padding: '5px 14px', fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-ui)',
-                          backdropFilter: 'blur(4px)',
-                        }}>
-                          {item.status === 'OUT_OF_STOCK' ? 'Sold out' : 'Unavailable'}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Body */}
-                  <div style={{ padding: '12px 14px 14px', display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
-                    <p style={{
-                      fontSize: 14, fontWeight: 700, color: 'var(--gray-900)',
-                      lineHeight: 1.35, margin: 0,
-                    }}>
-                      {item.name}
-                    </p>
-
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 'auto' }}>
-                      <span style={{
-                        fontSize: 17, fontWeight: 800, color: 'var(--primary)',
-                        fontFamily: 'var(--font-display)', letterSpacing: '-0.02em',
-                      }}>
-                        ₦{Number(item.price).toLocaleString()}
-                      </span>
-
-                      {cartItem ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <button
-                            className="qty-btn"
-                            onClick={() => updateQuantity(item.id, cartItem.quantity - 1)}
-                          >
-                            <Minus size={12} />
-                          </button>
-                          <span style={{ fontSize: 14, fontWeight: 700, minWidth: 20, textAlign: 'center' }}>
-                            {cartItem.quantity}
-                          </span>
-                          <button
-                            className="qty-btn"
-                            onClick={() => updateQuantity(item.id, cartItem.quantity + 1)}
-                          >
-                            <Plus size={12} />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          disabled={!available}
-                          onClick={() => handleAdd(item)}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: 5,
-                            padding: '7px 14px', borderRadius: 20,
-                            background: available ? 'var(--primary)' : 'var(--gray-200)',
-                            color: available ? '#fff' : 'var(--gray-400)',
-                            border: 'none', cursor: available ? 'pointer' : 'not-allowed',
-                            fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-ui)',
-                            transition: 'background 0.15s, transform 0.1s',
-                          }}
-                          onMouseEnter={e => { if (available) (e.currentTarget as HTMLButtonElement).style.background = 'var(--primary-dark)'; }}
-                          onMouseLeave={e => { if (available) (e.currentTarget as HTMLButtonElement).style.background = 'var(--primary)'; }}
-                        >
-                          <Plus size={13} />
-                          Add
-                        </button>
-                      )}
-                    </div>
-                  </div>
+            {filtered.map((item, i) => <ItemCard key={item.id} item={item} index={i} cartItem={getCartItem(item.id)} onAdd={handleAdd} onUpdate={updateQuantity} />)}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+            {grouped.map(({ category, items: catItems }) => (
+              <section key={category ?? 'other'}>
+                <h2 style={{
+                  fontSize: 13, fontWeight: 700, textTransform: 'uppercase',
+                  letterSpacing: '0.08em', color: 'var(--gray-500)',
+                  marginBottom: 14,
+                }}>
+                  {category ? CATEGORY_META[category].label : 'Other'}
+                </h2>
+                <div className="food-grid">
+                  {catItems.map((item, i) => <ItemCard key={item.id} item={item} index={i} cartItem={getCartItem(item.id)} onAdd={handleAdd} onUpdate={updateQuantity} />)}
                 </div>
-              );
-            })}
+              </section>
+            ))}
           </div>
         )}
       </div>
