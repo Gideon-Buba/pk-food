@@ -30,11 +30,11 @@ const TEST_ACCOUNTS = [
 ] as const;
 
 const CANTEEN_PHOTOS = [
-  '/canteen.png',
-  '/canteen-2.png',
-  '/canteen-3.png',
-  '/canteen-4.png',
-  '/canteen-5.png',
+  '/canteen.webp',
+  '/canteen-2.webp',
+  '/canteen-3.webp',
+  '/canteen-4.webp',
+  '/canteen-5.webp',
 ];
 
 type Mode = 'login' | 'register';
@@ -121,7 +121,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex" style={{ background: '#0a1c14' }}>
+    <div className="flex" style={{ height: '100dvh', overflow: 'hidden', background: '#0a1c14' }}>
 
       {/* ── Mobile-only: full-screen rotating photo background ── */}
       <div className="login-mobile-bg">
@@ -145,7 +145,7 @@ export default function Login() {
       {/* ── LEFT: Form panel (full-width on mobile, ~half on desktop) ── */}
       <div
         className="flex-1 flex flex-col justify-between lg:justify-center relative z-10 lg:bg-white"
-        style={{ padding: '48px 24px 36px', overflowY: 'auto' }}
+        style={{ padding: '48px 24px 36px', overflowY: 'auto', height: '100%' }}
       >
 
         {/* Mobile hero — above card, hidden on desktop */}
@@ -220,13 +220,13 @@ export default function Login() {
                   transition: 'left 0.22s cubic-bezier(0.4, 0, 0.2, 1)', zIndex: 0,
                 }} />
                 <button type="button" onClick={() => switchMode('login')}
-                  style={{ position: 'relative', zIndex: 1, transition: 'color 0.2s ease' }}
-                  className={`flex-1 py-2 text-sm font-medium rounded-md ${!isRegister ? 'text-foreground' : 'text-muted-foreground'}`}>
+                  style={{ position: 'relative', zIndex: 1, transition: 'color 0.18s ease' }}
+                  className={`flex-1 py-2 text-sm rounded-md ${!isRegister ? 'text-foreground font-semibold' : 'text-muted-foreground font-medium'}`}>
                   Sign in
                 </button>
                 <button type="button" onClick={() => switchMode('register')}
-                  style={{ position: 'relative', zIndex: 1, transition: 'color 0.2s ease' }}
-                  className={`flex-1 py-2 text-sm font-medium rounded-md ${isRegister ? 'text-foreground' : 'text-muted-foreground'}`}>
+                  style={{ position: 'relative', zIndex: 1, transition: 'color 0.18s ease' }}
+                  className={`flex-1 py-2 text-sm rounded-md ${isRegister ? 'text-foreground font-semibold' : 'text-muted-foreground font-medium'}`}>
                   Create account
                 </button>
               </div>
@@ -238,7 +238,7 @@ export default function Login() {
                   <div style={{ overflow: 'hidden' }}>
                     <div className="space-y-1.5 pb-0.5">
                       <Label htmlFor="name">Full name</Label>
-                      <Input id="name" type="text" placeholder="e.g. Gideon Buba"
+                      <Input id="name" type="text" placeholder="e.g. John Doe"
                         value={name} onChange={e => setName(e.target.value)}
                         required={isRegister} tabIndex={isRegister ? 0 : -1} />
                     </div>
@@ -247,7 +247,7 @@ export default function Login() {
 
                 <div className="space-y-1.5">
                   <Label htmlFor="email">Work email</Label>
-                  <Input id="email" type="email" placeholder="you@nrs.gov.ng"
+                  <Input id="email" type="email" placeholder="john.doe@nrs.gov.ng"
                     value={email} onChange={e => setEmail(e.target.value)} required autoFocus />
                 </div>
 
