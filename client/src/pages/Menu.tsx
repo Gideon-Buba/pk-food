@@ -333,7 +333,7 @@ export default function Menu() {
         </div>
       )}
 
-      <div className="page-wrap" style={{ paddingTop: 20 }}>
+      <div className="page-wrap" style={{ paddingTop: 20, paddingBottom: count > 0 ? 100 : 20 }}>
 
         {/* ── Status banners ─────────────────────────────── */}
         {visibleStatuses.length > 0 && (
