@@ -54,7 +54,7 @@ export default function Checkout() {
       </header>
 
       <div className="page-wrap" style={{ maxWidth: 840 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
+        <div className="checkout-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
           {/* Delivery form */}
           <div className="card" style={{ padding: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
@@ -123,8 +123,13 @@ export default function Checkout() {
         </div>
 
         <style>{`
-          @media (max-width: 680px) {
-            .checkout-grid { grid-template-columns: 1fr !important; }
+          @media (max-width: 700px) {
+            .checkout-grid {
+              grid-template-columns: 1fr !important;
+            }
+            .checkout-grid > *:last-child {
+              order: -1;
+            }
           }
         `}</style>
       </div>
