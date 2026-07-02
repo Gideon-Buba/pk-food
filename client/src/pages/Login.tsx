@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { api, setToken } from '../api/client';
+import { useCartStore } from '../store/cart';
 import type { ApiResponse } from '../types';
 
 interface JwtPayload { role: string; }
@@ -41,6 +42,7 @@ type Mode = 'login' | 'register';
 
 export default function Login() {
   const navigate  = useNavigate();
+  const clearCart = useCartStore(s => s.clearCart);
   const [mode, setMode]         = useState<Mode>('login');
   const [email, setEmail]       = useState('');
   const [name, setName]         = useState('');
@@ -93,6 +95,7 @@ export default function Login() {
     try {
       if (!isRegister) {
         const { data } = await api.post<ApiResponse<{ token: string }>>('/auth/login', { email, password });
+        clearCart();
         setToken(data.data.token);
         navigate(roleHome(data.data.token));
       } else {
@@ -111,6 +114,7 @@ export default function Login() {
     setDevLoading(devEmail);
     try {
       const { data } = await api.post<ApiResponse<{ token: string }>>(`/auth/dev-token/${devEmail}`);
+      clearCart();
       setToken(data.data.token);
       navigate(roleHome(data.data.token));
     } catch {

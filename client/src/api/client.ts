@@ -23,6 +23,7 @@ api.interceptors.response.use(
     const onPublicPage = publicPaths.some(p => window.location.pathname.startsWith(p));
     if (err.response?.status === 401 && !onPublicPage) {
       localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem('pk-food-cart');
       window.location.href = '/login';
     }
     return Promise.reject(error);
@@ -39,4 +40,5 @@ export const getToken = (): string | null => {
 
 export const clearToken = (): void => {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem('pk-food-cart');
 };

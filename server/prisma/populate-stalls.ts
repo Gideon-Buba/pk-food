@@ -1,5 +1,14 @@
-import { PrismaClient, Role } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+/**
+ * Production-safe stall population script.
+ * Replaces ALL vendors + menu items WITHOUT touching orders, users, or announcements.
+ *
+ * Run with: npx ts-node --transpile-only prisma/populate-stalls.ts
+ *
+ * WARNING: This deletes all existing vendors and menu items.
+ * Any orders referencing the old items will have their orderItems deleted first.
+ * Order records themselves are preserved for history.
+ */
+import { PrismaClient } from '@prisma/client';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -7,35 +16,14 @@ dotenv.config();
 const prisma = new PrismaClient();
 
 async function main(): Promise<void> {
-  console.log('Seeding database...');
+  console.log('Populating real stall data...');
 
-  // Clear in FK-safe order
+  // Must delete orderItems before menu_items due to FK constraint
+  // Orders rows themselves stay intact for history
   await prisma.orderItem.deleteMany();
-  await prisma.order.deleteMany();
   await prisma.menuItem.deleteMany();
   await prisma.vendor.deleteMany();
-  await prisma.announcement.deleteMany();
-
-  // Test users — password: "test1234", all pre-verified
-  const hashedPassword = await bcrypt.hash('test1234', 12);
-  await Promise.all([
-    prisma.user.upsert({
-      where: { email: 'staff@nrs.gov.ng' },
-      update: { role: Role.STAFF, password: hashedPassword, emailVerified: true },
-      create: { email: 'staff@nrs.gov.ng', role: Role.STAFF, password: hashedPassword, emailVerified: true },
-    }),
-    prisma.user.upsert({
-      where: { email: 'admin@nrs.gov.ng' },
-      update: { role: Role.ADMIN, password: hashedPassword, emailVerified: true },
-      create: { email: 'admin@nrs.gov.ng', role: Role.ADMIN, password: hashedPassword, emailVerified: true },
-    }),
-    prisma.user.upsert({
-      where: { email: 'runner@nrs.gov.ng' },
-      update: { role: Role.RUNNER, password: hashedPassword, emailVerified: true },
-      create: { email: 'runner@nrs.gov.ng', role: Role.RUNNER, password: hashedPassword, emailVerified: true },
-    }),
-  ]);
-  console.log('Test users seeded (password: test1234): staff | admin | runner @nrs.gov.ng');
+  console.log('Cleared old vendors and menu items.');
 
   // ── Real stalls ────────────────────────────────────────────────
   // NOTE: Prices are placeholders — update them via the Admin panel
@@ -66,15 +54,15 @@ async function main(): Promise<void> {
       { name: 'Sausage Rolls',       price: 400, vendorId: spiceShack.id, totalStock: 9,  onlineStock: 9  },
 
       // ── Mello's Kitchen ───────────────────────────────────────
-      { name: 'Penne',          price: 2000, vendorId: mellos.id, totalStock: 12, onlineStock: 12 },
-      { name: 'Asun Fried Rice',price: 2500, vendorId: mellos.id, totalStock: 14, onlineStock: 14 },
-      { name: 'Jollof Rice',    price: 1500, vendorId: mellos.id, totalStock: 16, onlineStock: 16 },
-      { name: 'Chicken Wings',  price: 1500, vendorId: mellos.id, totalStock: 20, onlineStock: 20 },
-      { name: 'Chicken',        price: 1200, vendorId: mellos.id, totalStock: 20, onlineStock: 20 },
-      { name: 'Fish',           price: 1000, vendorId: mellos.id, totalStock: 20, onlineStock: 20 },
-      { name: 'Coleslaw',       price: 500,  vendorId: mellos.id, totalStock: 10, onlineStock: 10 },
-      { name: 'Coconut Rice',   price: 1500, vendorId: mellos.id, totalStock: 20, onlineStock: 20 },
-      { name: 'Lasagna',        price: 3000, vendorId: mellos.id, totalStock: 2,  onlineStock: 2  },
+      { name: 'Penne',           price: 2000, vendorId: mellos.id, totalStock: 12, onlineStock: 12 },
+      { name: 'Asun Fried Rice', price: 2500, vendorId: mellos.id, totalStock: 14, onlineStock: 14 },
+      { name: 'Jollof Rice',     price: 1500, vendorId: mellos.id, totalStock: 16, onlineStock: 16 },
+      { name: 'Chicken Wings',   price: 1500, vendorId: mellos.id, totalStock: 20, onlineStock: 20 },
+      { name: 'Chicken',         price: 1200, vendorId: mellos.id, totalStock: 20, onlineStock: 20 },
+      { name: 'Fish',            price: 1000, vendorId: mellos.id, totalStock: 20, onlineStock: 20 },
+      { name: 'Coleslaw',        price: 500,  vendorId: mellos.id, totalStock: 10, onlineStock: 10 },
+      { name: 'Coconut Rice',    price: 1500, vendorId: mellos.id, totalStock: 20, onlineStock: 20 },
+      { name: 'Lasagna',         price: 3000, vendorId: mellos.id, totalStock: 2,  onlineStock: 2  },
 
       // ── Chinalase ─────────────────────────────────────────────
       { name: 'Steamed Rice', price: 1000, vendorId: chinalase.id, totalStock: 8,  onlineStock: 8  },
@@ -84,15 +72,8 @@ async function main(): Promise<void> {
     ],
   });
 
-  await prisma.announcement.createMany({
-    data: [
-      { type: 'STATUS',  message: 'Canteen is open — last orders by 2:00 PM daily.', active: true },
-      { type: 'GENERAL', message: 'Welcome to PK Food! Order from any stall and get it delivered to your floor.', active: true },
-    ],
-  });
-
   const count = await prisma.menuItem.count();
-  console.log(`Done — ${count} menu items seeded across 4 stalls.`);
+  console.log(`Done — ${count} menu items across 4 stalls.`);
   console.log('REMINDER: Update item prices via the Admin panel — current values are placeholders.');
 }
 
