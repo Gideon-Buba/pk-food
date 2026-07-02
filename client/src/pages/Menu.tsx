@@ -52,10 +52,7 @@ export default function Menu() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Vendor tabs with item counts
   const vendorNames = Array.from(new Set(items.map(i => i.vendor.name)));
-  const vendorCount: Record<string, number> = {};
-  items.forEach(i => { vendorCount[i.vendor.name] = (vendorCount[i.vendor.name] ?? 0) + 1; });
 
   const filtered = items.filter(item => {
     const matchVendor = activeVendor === 'all' || item.vendor.name === activeVendor;
@@ -287,7 +284,6 @@ export default function Menu() {
             onClick={() => setActiveVendor('all')}
           >
             All items
-            <span style={{ marginLeft: 6, fontSize: 11, opacity: 0.7 }}>{items.length}</span>
           </button>
           {vendorNames.map(v => (
             <button
@@ -296,7 +292,6 @@ export default function Menu() {
               onClick={() => setActiveVendor(v)}
             >
               {v}
-              <span style={{ marginLeft: 6, fontSize: 11, opacity: 0.7 }}>{vendorCount[v]}</span>
             </button>
           ))}
         </div>
