@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { MenuModule } from './menu/menu.module';
 import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
+import { UploadsModule } from './uploads/uploads.module';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
@@ -17,6 +18,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     MenuModule,
     OrdersModule,
     PaymentsModule,
+    UploadsModule,
   ],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },

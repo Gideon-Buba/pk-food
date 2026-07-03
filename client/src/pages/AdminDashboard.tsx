@@ -1,9 +1,75 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp } from 'lucide-react';
+import { ChevronLeft, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp, ImagePlus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
 import type { ApiResponse, MenuItem, Order, OrderStatus, Vendor } from '../types';
+
+interface ImageUploaderProps {
+  value: string;
+  onChange: (url: string) => void;
+}
+
+function ImageUploader({ value, onChange }: ImageUploaderProps) {
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = async (file: File) => {
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await api.post<ApiResponse<{ url: string }>>('/uploads/image', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      onChange(res.data.data.url);
+    } catch {
+      toast.error('Image upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      {value ? (
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <img src={value} alt="preview" style={{ width: 64, height: 64, borderRadius: 8, objectFit: 'cover', border: '1px solid var(--gray-200)' }} />
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            style={{ position: 'absolute', top: -6, right: -6, width: 18, height: 18, borderRadius: '50%', background: 'var(--error)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <X size={10} color="#fff" />
+          </button>
+        </div>
+      ) : (
+        <div style={{ width: 64, height: 64, borderRadius: 8, background: 'var(--gray-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <ImagePlus size={22} color="var(--gray-400)" />
+        </div>
+      )}
+      <div style={{ flex: 1 }}>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          style={{ display: 'none' }}
+          onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }}
+        />
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          disabled={uploading}
+          onClick={() => inputRef.current?.click()}
+        >
+          {uploading ? <span className="spinner" style={{ width: 13, height: 13 }} /> : <ImagePlus size={13} />}
+          {uploading ? 'Uploading…' : value ? 'Change image' : 'Upload image'}
+        </button>
+        <p style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 4 }}>JPEG, PNG or WebP — max 5 MB</p>
+      </div>
+    </div>
+  );
+}
 
 type Tab = 'orders' | 'menu' | 'vendors' | 'announcements' | 'revenue';
 
@@ -518,8 +584,8 @@ export default function AdminDashboard() {
                         <input className="input" type="number" value={newItem.onlineStock} onChange={e => setNewItem({ ...newItem, onlineStock: e.target.value })} />
                       </div>
                       <div className="form-group" style={{ gridColumn: '1/-1' }}>
-                        <label className="label">Image URL</label>
-                        <input className="input" placeholder="https://…" value={newItem.image} onChange={e => setNewItem({ ...newItem, image: e.target.value })} />
+                        <label className="label">Image</label>
+                        <ImageUploader value={newItem.image} onChange={url => setNewItem({ ...newItem, image: url })} />
                       </div>
                       <div style={{ gridColumn: '1/-1', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                         <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowAddItem(false)}>Cancel</button>
@@ -562,8 +628,8 @@ export default function AdminDashboard() {
                         <input className="input" type="number" value={editingItem.onlineStock} onChange={e => setEditingItem({ ...editingItem, onlineStock: Number(e.target.value) })} />
                       </div>
                       <div className="form-group" style={{ gridColumn: '1/-1' }}>
-                        <label className="label">Image URL</label>
-                        <input className="input" placeholder="https://…" value={editingItem.image ?? ''} onChange={e => setEditingItem({ ...editingItem, image: e.target.value })} />
+                        <label className="label">Image</label>
+                        <ImageUploader value={editingItem.image ?? ''} onChange={url => setEditingItem({ ...editingItem, image: url })} />
                       </div>
                       <div style={{ gridColumn: '1/-1', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                         <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingItem(null)}>Cancel</button>
