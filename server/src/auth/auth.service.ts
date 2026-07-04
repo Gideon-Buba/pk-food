@@ -45,9 +45,9 @@ export class AuthService {
     private readonly config: ConfigService,
   ) {
     this.mailer = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
+      host: 'smtp-relay.brevo.com',
+      port: 587,
+      secure: false,
       auth: {
         user: this.config.smtpUser,
         pass: this.config.smtpPass,
@@ -94,7 +94,7 @@ export class AuthService {
   private async sendVerificationEmail(email: string, token: string): Promise<void> {
     const link = `${this.config.appUrl}/verify-email?token=${token}`;
     await this.mailer.sendMail({
-      from: `"PK Food" <${this.config.smtpUser}>`,
+      from: this.config.emailFrom,
       to: email,
       subject: 'Verify your PK Food account',
       html: this.emailShell(`
@@ -223,7 +223,7 @@ export class AuthService {
     const link = `${this.config.appUrl}/reset-password?token=${resetToken}`;
 
     await this.mailer.sendMail({
-      from: `"PK Food" <${this.config.smtpUser}>`,
+      from: this.config.emailFrom,
       to: email,
       subject: 'Reset your PK Food password',
       html: this.emailShell(`

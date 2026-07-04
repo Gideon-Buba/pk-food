@@ -44,6 +44,10 @@ export class ConfigService {
     return this.require('SMTP_PASS');
   }
 
+  get emailFrom(): string {
+    return this.optional('EMAIL_FROM', 'PK Food <noreply@pkfood.ng>');
+  }
+
   get paystackSecretKey(): string {
     return this.require('PAYSTACK_SECRET_KEY');
   }
