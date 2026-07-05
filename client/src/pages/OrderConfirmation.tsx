@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { CheckCircle, XCircle, ArrowRight } from 'lucide-react';
+import { CheckCircle, XCircle, ClipboardList, UtensilsCrossed } from 'lucide-react';
 import { api } from '../api/client';
 import type { ApiResponse } from '../types';
 
@@ -55,9 +55,13 @@ export default function OrderConfirmation() {
             </p>
             <p style={{ color: 'var(--gray-400)', fontSize: 12, fontFamily: 'monospace', marginBottom: 28 }}>Ref: {reference}</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button className="btn btn-primary btn-full" onClick={() => navigate('/menu')}>
-                <ArrowRight size={15} />
-                Order more food
+              <button className="btn btn-primary btn-full" onClick={() => navigate('/orders')}>
+                <ClipboardList size={15} />
+                Track my order
+              </button>
+              <button className="btn btn-secondary btn-full" onClick={() => navigate('/menu')}>
+                <UtensilsCrossed size={15} />
+                Back to menu
               </button>
             </div>
           </>
