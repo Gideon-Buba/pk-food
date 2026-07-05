@@ -15,6 +15,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Profile from './pages/Profile';
 import BottomNav from './components/BottomNav';
+import ActiveOrderBar from './components/ActiveOrderBar';
 
 const AUTH_PATHS = ['/login', '/verify-email', '/forgot-password', '/reset-password'];
 
@@ -52,6 +53,7 @@ function AppContent() {
         <Route path="/runner" element={<ProtectedRoute roles={['RUNNER', 'ADMIN']}><RunnerQueue /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      {!isAuth && <ActiveOrderBar />}
       {!isAuth && <BottomNav />}
     </>
   );

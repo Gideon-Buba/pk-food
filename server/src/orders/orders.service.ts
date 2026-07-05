@@ -24,7 +24,7 @@ export class OrdersService {
     private readonly config: ConfigService,
   ) {}
 
-  async createOrder(userId: string, dto: CreateOrderDto): Promise<Order> {
+  async createOrder(user: User, dto: CreateOrderDto): Promise<Order> {
     return this.prisma.$transaction(async (tx) => {
       const menuItemIds = dto.items.map((i) => i.menuItemId);
       const menuItems = await tx.menuItem.findMany({
@@ -56,13 +56,11 @@ export class OrdersService {
         });
       }
 
-      const user = await tx.user.findUnique({ where: { id: userId } });
-
       return tx.order.create({
         data: {
-          userId,
-          floor: dto.floor ?? user?.floor ?? '',
-          officeNumber: dto.officeNumber ?? user?.officeNumber ?? '',
+          userId: user.id,
+          floor: dto.floor ?? user.floor ?? '',
+          officeNumber: dto.officeNumber ?? user.officeNumber ?? '',
           phone: dto.phone,
           deliveryFee: this.config.deliveryFee,
           items: {
@@ -78,7 +76,7 @@ export class OrdersService {
         },
         include: { items: { include: { menuItem: true } }, user: true },
       });
-    });
+    }, { timeout: 15000 });
   }
 
   async findAll(user: User): Promise<OrderWithRelations[]> {

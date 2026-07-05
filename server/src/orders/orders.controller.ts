@@ -23,7 +23,7 @@ export class OrdersController {
 
   @Post()
   async create(@CurrentUser() user: User, @Body() dto: CreateOrderDto) {
-    const data = await this.ordersService.createOrder(user.id, dto);
+    const data = await this.ordersService.createOrder(user, dto);
     return { data, message: 'Order placed successfully' };
   }
 
