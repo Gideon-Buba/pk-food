@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp, ImagePlus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
-import type { ApiResponse, MenuItem, Order, OrderStatus, Vendor } from '../types';
+import type { ApiResponse, FoodCategory, MenuItem, Order, OrderStatus, Vendor } from '../types';
+import { CATEGORY_META, CATEGORY_ORDER } from '../constants/categories';
 
 interface ImageUploaderProps {
   value: string;
@@ -109,7 +110,7 @@ export default function AdminDashboard() {
   const [editingVendorId, setEditingVendorId] = useState<string | null>(null);
   const [editingVendorName, setEditingVendorName] = useState('');
   const [showAddItem, setShowAddItem] = useState(false);
-  const [newItem, setNewItem] = useState({ name: '', price: '', vendorId: '', totalStock: '50', onlineStock: '50', image: '' });
+  const [newItem, setNewItem] = useState({ name: '', price: '', vendorId: '', totalStock: '50', onlineStock: '50', image: '', category: '' as FoodCategory | '' });
   const [addingItem, setAddingItem] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -193,6 +194,7 @@ export default function AdminDashboard() {
         onlineStock: Number(editingItem.onlineStock),
         image: editingItem.image ?? undefined,
         vendorId: editingItem.vendorId,
+        category: editingItem.category ?? undefined,
       });
       setMenuItems(prev => prev.map(m => m.id === editingItem.id ? { ...m, ...editingItem } : m));
       setEditingItem(null);
@@ -211,8 +213,9 @@ export default function AdminDashboard() {
         totalStock: parseInt(newItem.totalStock, 10),
         onlineStock: parseInt(newItem.onlineStock, 10),
         image: newItem.image || undefined,
+        category: newItem.category || undefined,
       });
-      setNewItem({ name: '', price: '', vendorId: '', totalStock: '50', onlineStock: '50', image: '' });
+      setNewItem({ name: '', price: '', vendorId: '', totalStock: '50', onlineStock: '50', image: '', category: '' });
       setShowAddItem(false);
       load();
       toast.success('Menu item added');
@@ -590,6 +593,13 @@ export default function AdminDashboard() {
                         </select>
                       </div>
                       <div className="form-group">
+                        <label className="label">Category</label>
+                        <select className="input" value={newItem.category} onChange={e => setNewItem({ ...newItem, category: e.target.value as FoodCategory | '' })} style={{ cursor: 'pointer' }}>
+                          <option value="">— none —</option>
+                          {CATEGORY_ORDER.map(c => <option key={c} value={c}>{CATEGORY_META[c].label}</option>)}
+                        </select>
+                      </div>
+                      <div className="form-group">
                         <label className="label">Total stock</label>
                         <input className="input" type="number" value={newItem.totalStock} onChange={e => setNewItem({ ...newItem, totalStock: e.target.value })} />
                       </div>
@@ -639,6 +649,13 @@ export default function AdminDashboard() {
                           <label className="label">Vendor</label>
                           <select className="input" value={editingItem.vendorId} onChange={e => setEditingItem({ ...editingItem, vendorId: e.target.value })} style={{ cursor: 'pointer' }}>
                             {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label className="label">Category</label>
+                          <select className="input" value={editingItem.category ?? ''} onChange={e => setEditingItem({ ...editingItem, category: (e.target.value as FoodCategory) || null })} style={{ cursor: 'pointer' }}>
+                            <option value="">— none —</option>
+                            {CATEGORY_ORDER.map(c => <option key={c} value={c}>{CATEGORY_META[c].label}</option>)}
                           </select>
                         </div>
                         <div className="form-group">
