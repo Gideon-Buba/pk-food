@@ -30,12 +30,25 @@ const TEST_ACCOUNTS = [
   { label: 'Runner', email: 'runner@nrs.gov.ng', tw: 'bg-orange-50 text-orange-700 hover:bg-orange-100' },
 ] as const;
 
-const CANTEEN_PHOTOS = [
-  '/canteen.webp',
-  '/canteen-2.webp',
-  '/canteen-3.webp',
-  '/canteen-4.webp',
-  '/canteen-5.webp',
+const SLIDES = [
+  {
+    photo:   '/canteen.webp',
+    line1:   'Meals Delivered to',
+    line2:   'Your Workspace',
+    tagline: 'Order from your office and have freshly prepared meals delivered directly to your desk.',
+  },
+  {
+    photo:   '/canteen-2.webp',
+    line1:   'Designed for',
+    line2:   'Better Breaks',
+    tagline: 'Step away from your desk and enjoy freshly prepared meals in a professional dining environment.',
+  },
+  {
+    photo:   '/canteen-3.webp',
+    line1:   'Explore',
+    line2:   "Today's Menu",
+    tagline: 'Browse available meals, compare options, and place your order in just a few clicks.',
+  },
 ];
 
 type Mode = 'login' | 'register';
@@ -61,14 +74,14 @@ export default function Login() {
   const slideTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    slideTimer.current = setInterval(() => setPhotoIdx(i => (i + 1) % CANTEEN_PHOTOS.length), 5000);
+    slideTimer.current = setInterval(() => setPhotoIdx(i => (i + 1) % SLIDES.length), 5000);
     return () => { if (slideTimer.current) clearInterval(slideTimer.current); };
   }, []);
 
   const goToPhoto = (i: number) => {
     if (slideTimer.current) clearInterval(slideTimer.current);
     setPhotoIdx(i);
-    slideTimer.current = setInterval(() => setPhotoIdx(idx => (idx + 1) % CANTEEN_PHOTOS.length), 5000);
+    slideTimer.current = setInterval(() => setPhotoIdx(idx => (idx + 1) % SLIDES.length), 5000);
   };
 
   const switchMode = (m: Mode) => { setMode(m); setError(''); setConfirm(''); setName(''); setPhone(''); };
@@ -127,19 +140,29 @@ export default function Login() {
   return (
     <div className="flex" style={{ height: '100dvh', overflow: 'hidden', background: '#0a1c14' }}>
 
+      <style>{`
+        @keyframes slideTextIn {
+          from { opacity: 0; transform: translateY(20px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes progressFill {
+          from { width: 0%; }
+          to   { width: 100%; }
+        }
+      `}</style>
+
       {/* ── Mobile-only: full-screen rotating photo background ── */}
       <div className="login-mobile-bg">
-        {CANTEEN_PHOTOS.map((src, i) => (
-          <div key={src} style={{
+        {SLIDES.map((slide, i) => (
+          <div key={slide.photo} style={{
             position: 'absolute', inset: 0,
-            backgroundImage: `url(${src})`,
+            backgroundImage: `url(${slide.photo})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center 35%',
             opacity: i === photoIdx ? 1 : 0,
             transition: 'opacity 1.2s ease',
           }} />
         ))}
-        {/* Gradient overlay — darker at bottom for legibility */}
         <div style={{
           position: 'absolute', inset: 0,
           background: 'linear-gradient(to bottom, rgba(10,28,20,0.52) 0%, rgba(10,28,20,0.45) 40%, rgba(10,28,20,0.72) 100%)',
@@ -154,29 +177,43 @@ export default function Login() {
 
         {/* Mobile hero — above card, hidden on desktop */}
         <div className="lg:hidden mb-6">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 18 }}>
-            <img src="/logo.jpeg" alt="PK Food" style={{ height: 30, width: 'auto', borderRadius: 6 }}
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 10, marginBottom: 20,
+            background: 'rgba(255,255,255,0.14)', backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            borderRadius: 10, padding: '8px 14px',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.2)',
+          }}>
+            <img src="/logo.jpeg" alt="PK Food" style={{ height: 32, width: 'auto', borderRadius: 5 }}
               onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-            <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: 700, letterSpacing: '0.22em', textTransform: 'uppercase', fontFamily: 'var(--font-ui)' }}>
-              PK Food · NRS HQ
-            </span>
+            <div>
+              <p style={{ color: '#fff', fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-ui)', lineHeight: 1.2 }}>PK Food</p>
+              <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 10, fontFamily: 'var(--font-ui)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>NRS HQ</p>
+            </div>
           </div>
-          <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 40, fontWeight: 300, color: '#fff', lineHeight: 1.08, marginBottom: 10 }}>
-            Stay at<br /><span style={{ fontWeight: 600 }}>your desk.</span>
-          </h1>
-          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', lineHeight: 1.65, fontFamily: 'var(--font-ui)', maxWidth: 300 }}>
-            Order from PK Canteen without leaving your floor.
-          </p>
+          <div key={`mob-${photoIdx}`} style={{ animation: 'slideTextIn 0.6s cubic-bezier(0.22,1,0.36,1) both' }}>
+            <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 36, fontWeight: 300, color: '#fff', lineHeight: 1.1, marginBottom: 10 }}>
+              {SLIDES[photoIdx].line1}<br />
+              <span style={{ fontWeight: 700 }}>{SLIDES[photoIdx].line2}</span>
+            </h1>
+            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', lineHeight: 1.65, fontFamily: 'var(--font-ui)', maxWidth: 300, animationDelay: '0.08s' }}>
+              {SLIDES[photoIdx].tagline}
+            </p>
+          </div>
         </div>
 
         {/* ── Form card (glass on mobile, plain on desktop) ── */}
         <div className="login-form-card lg:max-w-[380px]">
 
           {/* Desktop logo — inside card, hidden on mobile */}
-          <div className="hidden lg:block mb-8">
-            <img src="/logo.jpeg" alt="PK Food" style={{ height: 36, width: 'auto', borderRadius: 6, marginBottom: 10 }}
+          <div className="hidden lg:flex items-center gap-3 mb-8">
+            <img src="/logo.jpeg" alt="PK Food" style={{ height: 44, width: 'auto', borderRadius: 8 }}
               onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-            <span className="text-xs font-bold tracking-[0.2em] uppercase text-primary">PK Food · NRS HQ</span>
+            <div>
+              <p className="text-sm font-bold text-foreground leading-tight">PK Food</p>
+              <p className="text-xs text-muted-foreground tracking-widest uppercase" style={{ fontSize: 10 }}>NRS HQ</p>
+            </div>
           </div>
 
           {registered ? (
@@ -347,67 +384,111 @@ export default function Login() {
           )}
         </div>
 
-        {/* Mobile: photo dots — below card, hidden on desktop */}
-        <div className="lg:hidden flex items-center justify-center gap-2 mt-8">
-          {CANTEEN_PHOTOS.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => goToPhoto(i)}
-              style={{
-                width: i === photoIdx ? 22 : 6,
-                height: 6, borderRadius: 3,
-                border: 'none', cursor: 'pointer', padding: 0,
-                background: i === photoIdx ? '#fff' : 'rgba(255,255,255,0.35)',
-                transition: 'all 0.35s ease',
-              }}
-            />
-          ))}
+        {/* Mobile: photo dots + progress bar — below card, hidden on desktop */}
+        <div className="lg:hidden mt-8" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {SLIDES.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => goToPhoto(i)}
+                style={{
+                  width: i === photoIdx ? 22 : 6,
+                  height: 6, borderRadius: 3,
+                  border: 'none', cursor: 'pointer', padding: 0,
+                  background: i === photoIdx ? '#fff' : 'rgba(255,255,255,0.35)',
+                  transition: 'all 0.35s ease',
+                }}
+              />
+            ))}
+          </div>
+          <div style={{ width: 56, height: 2, borderRadius: 2, background: 'rgba(255,255,255,0.2)', overflow: 'hidden' }}>
+            <div key={`mob-prog-${photoIdx}`} style={{
+              height: '100%', borderRadius: 2, background: 'rgba(255,255,255,0.75)',
+              animation: 'progressFill 5s linear both',
+            }} />
+          </div>
         </div>
       </div>
 
       {/* ── RIGHT: Canteen photo panel (desktop only) ── */}
       <div className="hidden lg:block" style={{ width: 520, position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
-        {CANTEEN_PHOTOS.map((src, i) => (
-          <div key={src} style={{
+        {SLIDES.map((slide, i) => (
+          <div key={slide.photo} style={{
             position: 'absolute', inset: 0,
-            backgroundImage: `url(${src})`,
+            backgroundImage: `url(${slide.photo})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center 35%',
             opacity: i === photoIdx ? 1 : 0,
             transition: 'opacity 1.2s ease',
           }} />
         ))}
+        {/* Richer gradient: vignette from edges + dark bottom for text */}
         <div style={{
           position: 'absolute', inset: 0,
-          background: 'linear-gradient(to top, rgba(10,28,20,0.96) 0%, rgba(10,28,20,0.55) 45%, rgba(10,28,20,0.2) 100%)',
+          background: 'linear-gradient(to top, rgba(8,22,16,0.98) 0%, rgba(8,22,16,0.6) 40%, rgba(8,22,16,0.18) 100%)',
         }} />
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(to right, rgba(8,22,16,0.35) 0%, transparent 60%)',
+        }} />
+
         <div style={{ position: 'relative', zIndex: 1, height: '100%', display: 'flex', flexDirection: 'column', padding: '40px 48px' }}>
+          {/* Logo chip */}
           <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 10,
-            background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(8px)',
-            borderRadius: 10, padding: '8px 14px', alignSelf: 'flex-start',
+            display: 'inline-flex', alignItems: 'center', gap: 12,
+            background: 'rgba(255,255,255,0.16)', backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: '1px solid rgba(255,255,255,0.22)',
+            borderRadius: 12, padding: '10px 18px', alignSelf: 'flex-start',
+            boxShadow: '0 2px 16px rgba(0,0,0,0.25)',
           }}>
-            <img src="/logo.jpeg" alt="PK" style={{ height: 28, width: 'auto', borderRadius: 4 }}
+            <img src="/logo.jpeg" alt="PK Food" style={{ height: 36, width: 'auto', borderRadius: 6 }}
               onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-            <span style={{ color: '#fff', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-ui)', letterSpacing: '0.04em' }}>PK Food</span>
+            <div>
+              <p style={{ color: '#fff', fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-ui)', letterSpacing: '0.02em', lineHeight: 1.2 }}>PK Food</p>
+              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, fontFamily: 'var(--font-ui)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>NRS HQ</p>
+            </div>
           </div>
+
           <div style={{ flex: 1 }} />
-          <div>
-            <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 46, fontWeight: 300, color: '#fff', lineHeight: 1.1, letterSpacing: '0.01em', marginBottom: 18 }}>
-              Stay at<br /><span style={{ fontWeight: 600 }}>your desk.</span>
+
+          {/* Slide content — animates in on every slide change */}
+          <div key={`desk-${photoIdx}`} style={{ marginBottom: 36 }}>
+            <h1 style={{
+              fontFamily: 'var(--font-heading)', fontSize: 50, fontWeight: 300,
+              color: '#fff', lineHeight: 1.06, letterSpacing: '-0.01em', marginBottom: 20,
+              animation: 'slideTextIn 0.6s cubic-bezier(0.22,1,0.36,1) 0.07s both',
+            }}>
+              {SLIDES[photoIdx].line1}<br />
+              <span style={{ fontWeight: 700 }}>{SLIDES[photoIdx].line2}</span>
             </h1>
-            <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1.75, fontFamily: 'var(--font-ui)', maxWidth: 360 }}>
-              PK Canteen is right here in the building — and now it comes to you. No more leaving your floor, no queue, no wasted time. Order in seconds, eat where you work.
+            <p style={{
+              color: 'rgba(255,255,255,0.62)', fontSize: 15, lineHeight: 1.75,
+              fontFamily: 'var(--font-ui)', maxWidth: 340,
+              animation: 'slideTextIn 0.65s cubic-bezier(0.22,1,0.36,1) 0.14s both',
+            }}>
+              {SLIDES[photoIdx].tagline}
             </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 32 }}>
-              {CANTEEN_PHOTOS.map((_, i) => (
+          </div>
+
+          {/* Dots + progress bar */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {SLIDES.map((_, i) => (
                 <button key={i} onClick={() => goToPhoto(i)} style={{
                   width: i === photoIdx ? 24 : 6, height: 6,
                   borderRadius: 3, border: 'none', cursor: 'pointer', padding: 0,
-                  background: i === photoIdx ? '#fff' : 'rgba(255,255,255,0.3)',
+                  background: i === photoIdx ? '#fff' : 'rgba(255,255,255,0.28)',
                   transition: 'all 0.35s ease',
                 }} />
               ))}
+            </div>
+            <div style={{ width: 72, height: 2, borderRadius: 2, background: 'rgba(255,255,255,0.18)', overflow: 'hidden' }}>
+              <div key={`desk-prog-${photoIdx}`} style={{
+                height: '100%', borderRadius: 2,
+                background: 'rgba(255,255,255,0.8)',
+                animation: 'progressFill 5s linear both',
+              }} />
             </div>
           </div>
         </div>
