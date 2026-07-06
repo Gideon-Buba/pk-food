@@ -41,6 +41,14 @@ export class OrdersController {
     return { data, message: 'OK' };
   }
 
+  @Get('history')
+  @UseGuards(RolesGuard)
+  @Roles(Role.RUNNER, Role.ADMIN)
+  async getDeliveredToday() {
+    const data = await this.ordersService.getDeliveredToday();
+    return { data, message: 'OK' };
+  }
+
   @Get(':id')
   async findOne(@CurrentUser() user: User, @Param('id') id: string) {
     const data = await this.ordersService.findOne(id, user);

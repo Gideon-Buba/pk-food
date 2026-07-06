@@ -8,8 +8,9 @@ export const CATEGORY_META: Record<FoodCategory, { label: string }> = {
   PASTA:    { label: 'Pasta'             },
   PASTRIES: { label: 'Pastries & Snacks' },
   BUFFET:   { label: 'Buffet'            },
+  DRINKS:   { label: 'Drinks'            },
 };
 
 export const CATEGORY_ORDER: FoodCategory[] = [
-  'RICE', 'SWALLOW', 'PROTEIN', 'SIDES', 'PASTA', 'PASTRIES', 'BUFFET',
+  'RICE', 'SWALLOW', 'PROTEIN', 'SIDES', 'PASTA', 'PASTRIES', 'BUFFET', 'DRINKS',
 ];

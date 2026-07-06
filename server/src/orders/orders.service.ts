@@ -10,9 +10,17 @@ import { ConfigService } from '../config/config.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 
+const VALID_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
+  [OrderStatus.PENDING]:    [OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
+  [OrderStatus.CONFIRMED]:  [OrderStatus.PREPARING, OrderStatus.CANCELLED],
+  [OrderStatus.PREPARING]:  [OrderStatus.READY,     OrderStatus.CANCELLED],
+  [OrderStatus.READY]:      [OrderStatus.IN_TRANSIT, OrderStatus.CANCELLED],
+  [OrderStatus.IN_TRANSIT]: [OrderStatus.DELIVERED],
+};
+
 const orderInclude = {
   items: { include: { menuItem: true } },
-  user: { select: { email: true, floor: true, officeNumber: true } },
+  user: { select: { name: true, email: true, floor: true, officeNumber: true } },
 } satisfies Prisma.OrderInclude;
 
 type OrderWithRelations = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
@@ -107,16 +115,39 @@ export class OrdersService {
     const order = await this.prisma.order.findUnique({ where: { id } });
     if (!order) throw new NotFoundException('Order not found');
 
+    const allowed = VALID_TRANSITIONS[order.status];
+    if (!allowed) {
+      throw new BadRequestException(`Order is ${order.status} and cannot be updated further`);
+    }
+    if (!allowed.includes(dto.status)) {
+      throw new BadRequestException(
+        `Cannot move order from ${order.status} to ${dto.status}. Allowed: ${allowed.join(', ')}`,
+      );
+    }
+
     return this.prisma.order.update({
       where: { id },
       data: { status: dto.status },
     });
   }
 
+  async getDeliveredToday(): Promise<OrderWithRelations[]> {
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    return this.prisma.order.findMany({
+      where: {
+        status: OrderStatus.DELIVERED,
+        updatedAt: { gte: dayStart },
+      },
+      include: orderInclude,
+      orderBy: { updatedAt: 'desc' },
+    });
+  }
+
   async getDeliveryQueue(): Promise<OrderWithRelations[]> {
     return this.prisma.order.findMany({
       where: {
-        status: { in: [OrderStatus.READY, OrderStatus.IN_TRANSIT] },
+        status: { in: [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.IN_TRANSIT] },
       },
       include: orderInclude,
       orderBy: { createdAt: 'asc' },

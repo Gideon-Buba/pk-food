@@ -4,7 +4,7 @@ export type Floor =
   | 'F1' | 'F2' | 'F3' | 'F4' | 'F5' | 'F6' | 'F7' | 'F8'
   | 'F9' | 'F10' | 'F11' | 'F12' | 'F13' | 'F14' | 'F15' | 'F16';
 export type ItemStatus = 'AVAILABLE' | 'UNAVAILABLE' | 'OUT_OF_STOCK';
-export type FoodCategory = 'RICE' | 'SWALLOW' | 'PROTEIN' | 'SIDES' | 'PASTA' | 'PASTRIES' | 'BUFFET';
+export type FoodCategory = 'RICE' | 'SWALLOW' | 'PROTEIN' | 'SIDES' | 'PASTA' | 'PASTRIES' | 'BUFFET' | 'DRINKS';
 export type OrderStatus =
   | 'PENDING'
   | 'CONFIRMED'
@@ -53,15 +53,17 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
-  user: { email: string; floor: string | null; officeNumber: string | null };
+  user: { name?: string | null; email: string; floor: string | null; officeNumber: string | null };
   items: OrderItem[];
   deliveryFee: number;
   status: OrderStatus;
   floor: string;
   officeNumber: string;
+  phone?: string | null;
   paystackRef?: string;
   paid: boolean;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface Announcement {

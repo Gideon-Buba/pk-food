@@ -81,7 +81,13 @@ interface Announcement {
   createdAt: string;
 }
 
-const STATUS_OPTIONS: OrderStatus[] = ['PENDING','CONFIRMED','PREPARING','READY','IN_TRANSIT','DELIVERED','CANCELLED'];
+const NEXT_STATUSES: Partial<Record<OrderStatus, OrderStatus[]>> = {
+  PENDING:    ['CONFIRMED', 'CANCELLED'],
+  CONFIRMED:  ['PREPARING', 'CANCELLED'],
+  PREPARING:  ['READY',     'CANCELLED'],
+  READY:      ['IN_TRANSIT','CANCELLED'],
+  IN_TRANSIT: ['DELIVERED'],
+};
 
 function statusBadgeClass(s: OrderStatus): string {
   const m: Record<OrderStatus, string> = {
@@ -408,13 +414,21 @@ export default function AdminDashboard() {
                                 </span>
                               </td>
                               <td>
-                                <select
-                                  value={order.status}
-                                  onChange={e => updateStatus(order.id, e.target.value as OrderStatus)}
-                                  style={{ padding: '5px 8px', borderRadius: 'var(--radius-sm)', border: '1.5px solid var(--gray-200)', fontSize: 12, fontFamily: 'inherit', cursor: 'pointer', outline: 'none' }}
-                                >
-                                  {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
+                                {NEXT_STATUSES[order.status] ? (
+                                  <select
+                                    key={order.status}
+                                    defaultValue=""
+                                    onChange={e => { if (e.target.value) updateStatus(order.id, e.target.value as OrderStatus); }}
+                                    style={{ padding: '5px 8px', borderRadius: 'var(--radius-sm)', border: '1.5px solid var(--gray-200)', fontSize: 12, fontFamily: 'inherit', cursor: 'pointer', outline: 'none' }}
+                                  >
+                                    <option value="" disabled>Move to…</option>
+                                    {NEXT_STATUSES[order.status]!.map(s => <option key={s} value={s}>{s}</option>)}
+                                  </select>
+                                ) : (
+                                  <span style={{ fontSize: 12, color: 'var(--gray-400)', fontStyle: 'italic' }}>
+                                    {order.status === 'DELIVERED' ? 'Delivered' : 'Cancelled'}
+                                  </span>
+                                )}
                               </td>
                             </tr>
                           );
@@ -599,43 +613,52 @@ export default function AdminDashboard() {
                 )}
 
                 {editingItem && (
-                  <div className="card" style={{ padding: 20, marginBottom: 16, border: '1.5px solid var(--primary-light)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                      <h4 style={{ fontWeight: 700, fontSize: 14 }}>Edit — {editingItem.name}</h4>
-                      <button className="btn btn-ghost btn-icon-sm" onClick={() => setEditingItem(null)}>✕</button>
+                  <div
+                    style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(0,0,0,0.45)' }}
+                    onClick={() => setEditingItem(null)}
+                  >
+                    <div
+                      className="card"
+                      style={{ width: '100%', maxWidth: 520, padding: 24, maxHeight: '90vh', overflowY: 'auto' }}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <h4 style={{ fontWeight: 700, fontSize: 15, margin: 0 }}>Edit — {editingItem.name}</h4>
+                        <button className="btn btn-ghost btn-icon-sm" onClick={() => setEditingItem(null)}>✕</button>
+                      </div>
+                      <form onSubmit={handleUpdateItem} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div className="form-group" style={{ gridColumn: '1/-1' }}>
+                          <label className="label">Name</label>
+                          <input className="input" value={editingItem.name} onChange={e => setEditingItem({ ...editingItem, name: e.target.value })} required />
+                        </div>
+                        <div className="form-group">
+                          <label className="label">Price (₦)</label>
+                          <input className="input" type="number" value={editingItem.price} onChange={e => setEditingItem({ ...editingItem, price: Number(e.target.value) })} required />
+                        </div>
+                        <div className="form-group">
+                          <label className="label">Vendor</label>
+                          <select className="input" value={editingItem.vendorId} onChange={e => setEditingItem({ ...editingItem, vendorId: e.target.value })} style={{ cursor: 'pointer' }}>
+                            {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label className="label">Total stock</label>
+                          <input className="input" type="number" value={editingItem.totalStock} onChange={e => setEditingItem({ ...editingItem, totalStock: Number(e.target.value) })} />
+                        </div>
+                        <div className="form-group">
+                          <label className="label">Online stock</label>
+                          <input className="input" type="number" value={editingItem.onlineStock} onChange={e => setEditingItem({ ...editingItem, onlineStock: Number(e.target.value) })} />
+                        </div>
+                        <div className="form-group" style={{ gridColumn: '1/-1' }}>
+                          <label className="label">Image</label>
+                          <ImageUploader value={editingItem.image ?? ''} onChange={url => setEditingItem({ ...editingItem, image: url })} />
+                        </div>
+                        <div style={{ gridColumn: '1/-1', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingItem(null)}>Cancel</button>
+                          <button type="submit" className="btn btn-primary btn-sm">Save changes</button>
+                        </div>
+                      </form>
                     </div>
-                    <form onSubmit={handleUpdateItem} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                      <div className="form-group" style={{ gridColumn: '1/-1' }}>
-                        <label className="label">Name</label>
-                        <input className="input" value={editingItem.name} onChange={e => setEditingItem({ ...editingItem, name: e.target.value })} required />
-                      </div>
-                      <div className="form-group">
-                        <label className="label">Price (₦)</label>
-                        <input className="input" type="number" value={editingItem.price} onChange={e => setEditingItem({ ...editingItem, price: Number(e.target.value) })} required />
-                      </div>
-                      <div className="form-group">
-                        <label className="label">Vendor</label>
-                        <select className="input" value={editingItem.vendorId} onChange={e => setEditingItem({ ...editingItem, vendorId: e.target.value })} style={{ cursor: 'pointer' }}>
-                          {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label className="label">Total stock</label>
-                        <input className="input" type="number" value={editingItem.totalStock} onChange={e => setEditingItem({ ...editingItem, totalStock: Number(e.target.value) })} />
-                      </div>
-                      <div className="form-group">
-                        <label className="label">Online stock</label>
-                        <input className="input" type="number" value={editingItem.onlineStock} onChange={e => setEditingItem({ ...editingItem, onlineStock: Number(e.target.value) })} />
-                      </div>
-                      <div className="form-group" style={{ gridColumn: '1/-1' }}>
-                        <label className="label">Image</label>
-                        <ImageUploader value={editingItem.image ?? ''} onChange={url => setEditingItem({ ...editingItem, image: url })} />
-                      </div>
-                      <div style={{ gridColumn: '1/-1', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingItem(null)}>Cancel</button>
-                        <button type="submit" className="btn btn-primary btn-sm">Save changes</button>
-                      </div>
-                    </form>
                   </div>
                 )}
 

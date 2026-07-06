@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building2, Lock, Phone, User as UserIcon, ClipboardList, LogOut, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Building2, Lock, Phone, User as UserIcon, ClipboardList, LogOut, ChevronRight, History } from 'lucide-react';
 import { clearToken } from '../api/client';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
@@ -200,7 +200,9 @@ export default function Profile() {
             {/* Quick links */}
             <div className="card" style={{ marginTop: 16, overflow: 'hidden' }}>
               {[
-                { icon: <ClipboardList size={16} color="var(--primary)" />, label: 'My Orders', sub: 'View your order history', onClick: () => navigate('/orders') },
+                user?.role === 'RUNNER'
+                  ? { icon: <History size={16} color="var(--primary)" />, label: 'Delivery history', sub: "Today's completed deliveries", onClick: () => navigate('/runner-history') }
+                  : { icon: <ClipboardList size={16} color="var(--primary)" />, label: 'My Orders', sub: 'View your order history', onClick: () => navigate('/orders') },
                 { icon: <LogOut size={16} color="var(--error)" />, label: 'Sign out', sub: 'Log out of your account', onClick: () => { clearToken(); navigate('/login'); }, danger: true },
               ].map((item, i, arr) => (
                 <button
