@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp, ImagePlus, X } from 'lucide-react';
+import { Menu, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp, ImagePlus, X, LayoutGrid, LayoutList, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
 import type { ApiResponse, FoodCategory, MenuItem, Order, OrderStatus, Vendor } from '../types';
 import { CATEGORY_META, CATEGORY_ORDER } from '../constants/categories';
+import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface ImageUploaderProps {
   value: string;
@@ -118,6 +119,21 @@ export default function AdminDashboard() {
   const [newAnnouncement, setNewAnnouncement] = useState({ type: 'GENERAL' as 'STATUS' | 'GENERAL', message: '' });
   const [addingAnnouncement, setAddingAnnouncement] = useState(false);
 
+  // Menu filters + view + bulk select
+  const [menuSearch, setMenuSearch] = useState('');
+  const [menuCategoryFilter, setMenuCategoryFilter] = useState<FoodCategory | ''>('');
+  const [menuVendorFilter, setMenuVendorFilter] = useState('');
+  const [menuView, setMenuView] = useState<'list' | 'grid'>('list');
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const exitSelectMode = () => { setSelectMode(false); setSelectedItemIds(new Set()); };
+
+  // Orders filters
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState<OrderStatus | ''>('');
+
   const load = () => {
     setLoading(true);
     Promise.all([
@@ -180,8 +196,39 @@ export default function AdminDashboard() {
     try {
       await api.delete(`/menu/items/${id}`);
       setMenuItems(prev => prev.filter(m => m.id !== id));
+      setSelectedItemIds(prev => { const s = new Set(prev); s.delete(id); return s; });
       toast.success('Item deleted');
     } catch { toast.error('Failed to delete item'); }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedItemIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedItemIds.size} item${selectedItemIds.size > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    setBulkDeleting(true);
+    const ids = [...selectedItemIds];
+    const results = await Promise.allSettled(ids.map(id => api.delete(`/menu/items/${id}`)));
+    const failed = results.filter(r => r.status === 'rejected').length;
+    setMenuItems(prev => prev.filter(m => !ids.includes(m.id) || results[ids.indexOf(m.id)].status === 'rejected'));
+    setSelectedItemIds(new Set());
+    setBulkDeleting(false);
+    if (failed > 0) toast.error(`${failed} item${failed > 1 ? 's' : ''} could not be deleted`);
+    else toast.success(`${ids.length} item${ids.length > 1 ? 's' : ''} deleted`);
+  };
+
+  const toggleSelectItem = (id: string) => {
+    setSelectedItemIds(prev => {
+      const s = new Set(prev);
+      s.has(id) ? s.delete(id) : s.add(id);
+      return s;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedItemIds.size === filteredMenuItems.length) {
+      setSelectedItemIds(new Set());
+    } else {
+      setSelectedItemIds(new Set(filteredMenuItems.map(i => i.id)));
+    }
   };
 
   const handleUpdateItem = async (e: React.FormEvent) => {
@@ -305,7 +352,6 @@ export default function AdminDashboard() {
     });
   });
   const vendorList = [...vendorStats.values()].sort((a, b) => b.revenue - a.revenue);
-  const maxVendorRev = Math.max(...vendorList.map(v => v.revenue), 1);
 
   // Last 7 days revenue
   const last7 = Array.from({ length: 7 }, (_, i) => {
@@ -314,7 +360,32 @@ export default function AdminDashboard() {
     const dayOrders = paidOrders.filter(o => new Date(o.createdAt).toDateString() === ds);
     return { label: d.toLocaleDateString('en-NG', { weekday: 'short' }), value: dayOrders.reduce((s, o) => s + orderTotal(o), 0) };
   });
-  const maxDay = Math.max(...last7.map(d => d.value), 1);
+
+  const statusPieData = [
+    { name: 'Delivered', value: delivered, color: '#16a34a' },
+    { name: 'Active',    value: active,    color: '#3b82f6' },
+    { name: 'Pending',   value: pending,   color: '#f59e0b' },
+    { name: 'Cancelled', value: cancelled, color: '#ef4444' },
+  ].filter(d => d.value > 0);
+
+  const VENDOR_COLORS = ['#2d6a4f', '#40916c', '#52b788', '#74c69d', '#95d5b2', '#b7e4c7'];
+
+  const filteredMenuItems = menuItems.filter(item => {
+    if (menuSearch && !item.name.toLowerCase().includes(menuSearch.toLowerCase())) return false;
+    if (menuCategoryFilter && item.category !== menuCategoryFilter) return false;
+    if (menuVendorFilter && item.vendorId !== menuVendorFilter) return false;
+    return true;
+  });
+
+  const filteredOrders = orders.filter(order => {
+    if (orderSearch) {
+      const q = orderSearch.toLowerCase();
+      const name = order.user.email.split('@')[0].toLowerCase();
+      if (!name.includes(q) && !order.user.email.toLowerCase().includes(q)) return false;
+    }
+    if (orderStatusFilter && order.status !== orderStatusFilter) return false;
+    return true;
+  });
 
   const NAV_ITEMS: { id: Tab; label: string; Icon: React.ElementType }[] = [
     { id: 'orders',        label: 'Orders',    Icon: ShoppingBag },
@@ -433,22 +504,6 @@ export default function AdminDashboard() {
         {/* Main content */}
         <main style={{ flex: 1, minWidth: 0, padding: '24px', overflowX: 'hidden' }}>
 
-          {/* Stats strip */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 24 }}>
-            {[
-              { label: 'Total revenue',   value: `₦${revenue.toLocaleString()}`,    sub: `₦${revenueToday.toLocaleString()} today`,  color: 'var(--primary)' },
-              { label: 'Avg order value', value: `₦${avgOrder.toLocaleString()}`,    sub: `${paidOrders.length} paid orders`,          color: 'var(--info)'    },
-              { label: 'Active orders',   value: active,                             sub: `${pending} pending`,                        color: 'var(--warning)' },
-              { label: 'Delivered',       value: delivered,                          sub: `${cancelled} cancelled`,                    color: '#16a34a'        },
-            ].map(s => (
-              <div key={s.label} className="card" style={{ padding: '16px 20px' }}>
-                <p style={{ fontSize: 12, color: 'var(--gray-400)', fontWeight: 500, marginBottom: 4 }}>{s.label}</p>
-                <p style={{ fontSize: 22, fontWeight: 800, color: s.color, letterSpacing: '-0.03em' }}>{s.value}</p>
-                <p style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 2 }}>{s.sub}</p>
-              </div>
-            ))}
-          </div>
-
           {/* Section heading */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <h2 style={{ fontWeight: 700, fontSize: 15, color: 'var(--gray-800)' }}>
@@ -462,10 +517,35 @@ export default function AdminDashboard() {
             {/* Orders tab */}
             {tab === 'orders' && (
               <div>
-                {orders.length === 0 ? (
+                {/* Orders toolbar */}
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+                  <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
+                    <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', pointerEvents: 'none' }} />
+                    <input
+                      className="input"
+                      placeholder="Search by customer…"
+                      value={orderSearch}
+                      onChange={e => setOrderSearch(e.target.value)}
+                      style={{ paddingLeft: 32 }}
+                    />
+                  </div>
+                  <select
+                    className="input"
+                    value={orderStatusFilter}
+                    onChange={e => setOrderStatusFilter(e.target.value as OrderStatus | '')}
+                    style={{ width: 150, cursor: 'pointer', flexShrink: 0 }}
+                  >
+                    <option value="">All statuses</option>
+                    {(['PENDING','CONFIRMED','PREPARING','READY','IN_TRANSIT','DELIVERED','CANCELLED'] as OrderStatus[]).map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {filteredOrders.length === 0 ? (
                   <div className="empty-state" style={{ padding: 40 }}>
                     <ShoppingBag className="empty-state-icon" />
-                    <h3>No orders yet</h3>
+                    <h3>{orders.length === 0 ? 'No orders yet' : 'No orders match your filters'}</h3>
                   </div>
                 ) : (
                   <div style={{ overflowX: 'auto' }}>
@@ -482,7 +562,7 @@ export default function AdminDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {orders.map(order => {
+                        {filteredOrders.map(order => {
                           const total = Number(order.deliveryFee) + order.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0);
                           return (
                             <tr key={order.id}>
@@ -531,119 +611,159 @@ export default function AdminDashboard() {
 
             {/* Revenue tab */}
             {tab === 'revenue' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
 
-                {/* KPI row */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                {/* KPI cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 14 }}>
                   {[
-                    { label: 'Total revenue', value: `₦${revenue.toLocaleString()}`, sub: `from ${paidOrders.length} paid orders`, color: 'var(--primary)' },
-                    { label: "Today's revenue", value: `₦${revenueToday.toLocaleString()}`, sub: `${todayOrders.length} orders today`, color: '#16a34a' },
-                    { label: 'Avg order value', value: `₦${avgOrder.toLocaleString()}`, sub: 'across paid orders', color: 'var(--info)' },
-                    { label: 'Payment rate', value: orders.length ? `${Math.round((paidOrders.length / orders.length) * 100)}%` : '—', sub: `${orders.length - paidOrders.length} unpaid`, color: 'var(--warning)' },
+                    { label: 'Total revenue',  value: `₦${revenue.toLocaleString()}`,       sub: `from ${paidOrders.length} paid orders`, color: '#2d6a4f', bg: '#f0faf5' },
+                    { label: "Today's revenue", value: `₦${revenueToday.toLocaleString()}`,  sub: `${todayOrders.length} orders today`,    color: '#16a34a', bg: '#f0fdf4' },
+                    { label: 'Avg order value', value: `₦${avgOrder.toLocaleString()}`,      sub: 'across paid orders',                    color: '#3b82f6', bg: '#eff6ff' },
+                    { label: 'Payment rate',    value: orders.length ? `${Math.round((paidOrders.length / orders.length) * 100)}%` : '—', sub: `${orders.length - paidOrders.length} unpaid`, color: '#f59e0b', bg: '#fffbeb' },
                   ].map(c => (
-                    <div key={c.label} style={{ padding: '16px 18px', borderRadius: 'var(--radius-md)', border: '1px solid var(--gray-100)', background: 'var(--gray-50)' }}>
-                      <p style={{ fontSize: 12, color: 'var(--gray-500)', fontWeight: 500, marginBottom: 6 }}>{c.label}</p>
-                      <p style={{ fontSize: 22, fontWeight: 800, color: c.color, letterSpacing: '-0.03em', marginBottom: 2 }}>{c.value}</p>
-                      <p style={{ fontSize: 11, color: 'var(--gray-400)' }}>{c.sub}</p>
+                    <div key={c.label} style={{ padding: '18px 20px', borderRadius: 'var(--radius-lg)', background: c.bg, border: `1px solid ${c.color}22` }}>
+                      <p style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>{c.label}</p>
+                      <p style={{ fontSize: 24, fontWeight: 800, color: c.color, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 6 }}>{c.value}</p>
+                      <p style={{ fontSize: 11, color: '#9ca3af' }}>{c.sub}</p>
                     </div>
                   ))}
                 </div>
 
-                {/* 7-day bar chart */}
+                {/* 7-day revenue area chart */}
                 <div>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-700)', marginBottom: 14 }}>Revenue — last 7 days</p>
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 110 }}>
-                    {last7.map((d, i) => (
-                      <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                        <span style={{ fontSize: 10, color: 'var(--gray-400)', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                          {d.value > 0 ? `₦${(d.value / 1000).toFixed(1)}k` : ''}
-                        </span>
-                        <div style={{ width: '100%', borderRadius: '4px 4px 2px 2px', background: d.value > 0 ? 'var(--primary)' : 'var(--gray-100)', height: `${Math.max((d.value / maxDay) * 76, d.value > 0 ? 6 : 4)}px`, transition: 'height 0.35s ease' }} />
-                        <span style={{ fontSize: 10, color: 'var(--gray-500)', fontWeight: 600 }}>{d.label}</span>
-                      </div>
-                    ))}
-                  </div>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 16 }}>Revenue — last 7 days</p>
+                  <ResponsiveContainer width="100%" height={230}>
+                    <AreaChart data={last7} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor="#2d6a4f" stopOpacity={0.25} />
+                          <stop offset="95%" stopColor="#2d6a4f" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                      <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} />
+                      <YAxis
+                        axisLine={false} tickLine={false}
+                        tick={{ fontSize: 11, fill: '#9ca3af' }}
+                        tickFormatter={v => v >= 1000 ? `₦${(v / 1000).toFixed(0)}k` : `₦${v}`}
+                        width={58}
+                      />
+                      <Tooltip
+                        formatter={(v: unknown) => [`₦${Number(v).toLocaleString()}`, 'Revenue']}
+                        contentStyle={{ borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 13, boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}
+                        cursor={{ stroke: '#2d6a4f', strokeWidth: 1, strokeDasharray: '4 4' }}
+                      />
+                      <Area
+                        type="monotone" dataKey="value" stroke="#2d6a4f" strokeWidth={2.5}
+                        fill="url(#revGrad)"
+                        dot={{ fill: '#2d6a4f', r: 4, strokeWidth: 0 }}
+                        activeDot={{ r: 6, fill: '#2d6a4f', stroke: '#fff', strokeWidth: 2 }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </div>
 
-                {/* Vendor performance */}
-                <div>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-700)', marginBottom: 12 }}>Vendor performance</p>
-                  {vendorList.length === 0 ? (
-                    <p style={{ fontSize: 13, color: 'var(--gray-400)' }}>No orders yet</p>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {vendorList.map((v, i) => (
-                        <div key={v.name} style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--gray-100)', background: i === 0 ? 'var(--primary-subtle)' : '#fff' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 28, height: 28, borderRadius: 8, background: i === 0 ? 'var(--primary-light)' : 'var(--gray-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                              <Store size={13} color={i === 0 ? 'var(--primary)' : 'var(--gray-400)'} />
-                            </div>
-                            <span style={{ flex: 1, fontWeight: 600, fontSize: 14, color: 'var(--gray-800)' }}>{v.name}</span>
-                            <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--primary)' }}>₦{v.revenue.toLocaleString()}</span>
-                          </div>
-                          <div style={{ height: 5, borderRadius: 99, background: 'var(--gray-100)', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', borderRadius: 99, background: i === 0 ? 'var(--primary)' : 'var(--gray-300)', width: `${(v.revenue / maxVendorRev) * 100}%`, transition: 'width 0.4s ease' }} />
-                          </div>
-                          <div style={{ display: 'flex', gap: 16 }}>
-                            <span style={{ fontSize: 11, color: 'var(--gray-400)' }}>{v.qty} units sold</span>
-                            <span style={{ fontSize: 11, color: 'var(--gray-400)' }}>{v.orders} order lines</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                {/* Vendor bar + Status donut side by side */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 28 }}>
 
-                {/* Top items + status side by side */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-
-                  {/* Top items */}
+                  {/* Vendor revenue - horizontal bar chart */}
                   <div>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-700)', marginBottom: 12 }}>Top items</p>
-                    {topItems.length === 0 ? (
-                      <p style={{ fontSize: 13, color: 'var(--gray-400)' }}>No orders yet</p>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 16 }}>Revenue by vendor</p>
+                    {vendorList.length === 0 ? (
+                      <p style={{ fontSize: 13, color: '#9ca3af' }}>No orders yet</p>
                     ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {topItems.map((item, i) => (
-                          <div key={item.name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: i === 0 ? 'var(--primary-subtle)' : 'transparent' }}>
-                            <span style={{ fontSize: 12, fontWeight: 800, color: i === 0 ? 'var(--primary)' : 'var(--gray-300)', width: 18 }}>#{i + 1}</span>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--gray-800)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</p>
-                              <p style={{ fontSize: 11, color: 'var(--gray-400)' }}>{item.vendorName}</p>
-                            </div>
-                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                              <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)' }}>₦{item.revenue.toLocaleString()}</p>
-                              <p style={{ fontSize: 11, color: 'var(--gray-400)' }}>{item.qty} sold</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                      <ResponsiveContainer width="100%" height={Math.max(vendorList.length * 44 + 16, 120)}>
+                        <BarChart data={vendorList} layout="vertical" margin={{ top: 0, right: 12, left: 0, bottom: 0 }}>
+                          <XAxis
+                            type="number" axisLine={false} tickLine={false}
+                            tick={{ fontSize: 11, fill: '#9ca3af' }}
+                            tickFormatter={v => `₦${(v / 1000).toFixed(0)}k`}
+                          />
+                          <YAxis
+                            type="category" dataKey="name" axisLine={false} tickLine={false}
+                            tick={{ fontSize: 12, fill: '#374151' }} width={88}
+                          />
+                          <Tooltip
+                            formatter={(v: unknown) => [`₦${Number(v).toLocaleString()}`, 'Revenue']}
+                            contentStyle={{ borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 13, boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}
+                            cursor={{ fill: 'rgba(45,106,79,0.06)' }}
+                          />
+                          <Bar dataKey="revenue" radius={[0, 6, 6, 0]} barSize={20}>
+                            {vendorList.map((_, i) => (
+                              <Cell key={i} fill={VENDOR_COLORS[i % VENDOR_COLORS.length]} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
                     )}
                   </div>
 
-                  {/* Order status breakdown */}
+                  {/* Order status donut */}
                   <div>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-700)', marginBottom: 12 }}>Orders by status</p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {[
-                        { label: 'Delivered', count: delivered, color: '#16a34a' },
-                        { label: 'Active', count: active, color: 'var(--info)' },
-                        { label: 'Pending', count: pending, color: 'var(--warning)' },
-                        { label: 'Cancelled', count: cancelled, color: 'var(--error)' },
-                      ].map(row => (
-                        <div key={row.label}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                            <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>{row.label}</span>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: row.color }}>{row.count}</span>
-                          </div>
-                          <div style={{ height: 5, borderRadius: 99, background: 'var(--gray-100)', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', borderRadius: 99, background: row.color, width: orders.length ? `${(row.count / orders.length) * 100}%` : '0%', transition: 'width 0.4s ease' }} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 16 }}>Orders by status</p>
+                    {statusPieData.length === 0 ? (
+                      <p style={{ fontSize: 13, color: '#9ca3af' }}>No orders yet</p>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={200}>
+                        <PieChart>
+                          <Pie
+                            data={statusPieData} cx="50%" cy="50%"
+                            innerRadius={52} outerRadius={80}
+                            paddingAngle={3} dataKey="value" nameKey="name"
+                            strokeWidth={0}
+                          >
+                            {statusPieData.map((entry, i) => (
+                              <Cell key={i} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            formatter={(v: unknown, name: unknown) => [String(v), String(name)] as [string, string]}
+                            contentStyle={{ borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 13, boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}
+                          />
+                          <Legend
+                            iconType="circle" iconSize={8}
+                            formatter={(value: string) => <span style={{ fontSize: 12, color: '#374151' }}>{value}</span>}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    )}
                   </div>
 
+                </div>
+
+                {/* Top items table */}
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 14 }}>Top items by revenue</p>
+                  {topItems.length === 0 ? (
+                    <p style={{ fontSize: 13, color: '#9ca3af' }}>No orders yet</p>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: 32 }}>#</th>
+                            <th>Item</th>
+                            <th>Vendor</th>
+                            <th>Units sold</th>
+                            <th>Revenue</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {topItems.map((item, i) => (
+                            <tr key={item.name}>
+                              <td>
+                                <span style={{ fontWeight: 800, color: i === 0 ? '#2d6a4f' : '#d1d5db', fontSize: 13 }}>#{i + 1}</span>
+                              </td>
+                              <td style={{ fontWeight: 600 }}>{item.name}</td>
+                              <td style={{ color: '#6b7280', fontSize: 13 }}>{item.vendorName}</td>
+                              <td style={{ color: '#374151' }}>{item.qty}</td>
+                              <td style={{ fontWeight: 700, color: '#2d6a4f' }}>₦{item.revenue.toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
 
               </div>
@@ -652,12 +772,108 @@ export default function AdminDashboard() {
             {/* Menu tab */}
             {tab === 'menu' && (
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <h3 className="section-title">{menuItems.length} items</h3>
-                  <button className="btn btn-primary btn-sm" onClick={() => setShowAddItem(true)}>
+                {/* Menu toolbar */}
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
+                  <div style={{ position: 'relative', flex: 1, minWidth: 160 }}>
+                    <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', pointerEvents: 'none' }} />
+                    <input
+                      className="input"
+                      placeholder="Search items…"
+                      value={menuSearch}
+                      onChange={e => setMenuSearch(e.target.value)}
+                      style={{ paddingLeft: 32 }}
+                    />
+                  </div>
+                  <select
+                    className="input"
+                    value={menuCategoryFilter}
+                    onChange={e => setMenuCategoryFilter(e.target.value as FoodCategory | '')}
+                    style={{ width: 140, cursor: 'pointer', flexShrink: 0 }}
+                  >
+                    <option value="">All categories</option>
+                    {CATEGORY_ORDER.map(c => <option key={c} value={c}>{CATEGORY_META[c].label}</option>)}
+                  </select>
+                  <select
+                    className="input"
+                    value={menuVendorFilter}
+                    onChange={e => setMenuVendorFilter(e.target.value)}
+                    style={{ width: 130, cursor: 'pointer', flexShrink: 0 }}
+                  >
+                    <option value="">All vendors</option>
+                    {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </select>
+                  {/* View toggle */}
+                  <div style={{ display: 'flex', borderRadius: 'var(--radius-md)', border: '1.5px solid var(--gray-200)', overflow: 'hidden', flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      onClick={() => setMenuView('list')}
+                      style={{ padding: '7px 10px', border: 'none', cursor: 'pointer', background: menuView === 'list' ? 'var(--primary)' : 'transparent', color: menuView === 'list' ? '#fff' : 'var(--gray-400)', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}
+                      title="List view"
+                    >
+                      <LayoutList size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMenuView('grid')}
+                      style={{ padding: '7px 10px', border: 'none', cursor: 'pointer', background: menuView === 'grid' ? 'var(--primary)' : 'transparent', color: menuView === 'grid' ? '#fff' : 'var(--gray-400)', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}
+                      title="Grid view"
+                    >
+                      <LayoutGrid size={15} />
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${selectMode ? 'btn-secondary' : 'btn-ghost'}`}
+                    onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
+                    style={{ flexShrink: 0, border: '1.5px solid var(--gray-200)' }}
+                  >
+                    {selectMode ? 'Cancel' : 'Select'}
+                  </button>
+                  <button className="btn btn-primary btn-sm" onClick={() => setShowAddItem(true)} style={{ flexShrink: 0 }}>
                     <Plus size={14} /> Add item
                   </button>
                 </div>
+                {/* Bulk action bar — only visible in select mode */}
+                <div style={{
+                  overflow: 'hidden',
+                  maxHeight: selectMode ? 80 : 0,
+                  opacity: selectMode ? 1 : 0,
+                  transition: 'max-height 0.25s ease, opacity 0.2s ease',
+                  marginBottom: selectMode ? 12 : 0,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 'var(--radius-md)', background: selectedItemIds.size > 0 ? 'var(--primary-subtle)' : 'var(--gray-50)', border: `1.5px solid ${selectedItemIds.size > 0 ? 'var(--primary-light)' : 'var(--gray-200)'}`, transition: 'background 0.15s, border-color 0.15s' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedItemIds.size === filteredMenuItems.length && filteredMenuItems.length > 0}
+                      onChange={toggleSelectAll}
+                      style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--primary)', flexShrink: 0 }}
+                    />
+                    <span style={{ fontSize: 13, color: selectedItemIds.size > 0 ? 'var(--primary)' : 'var(--gray-500)', flex: 1, fontWeight: selectedItemIds.size > 0 ? 600 : 400 }}>
+                      {selectedItemIds.size > 0 ? `${selectedItemIds.size} item${selectedItemIds.size > 1 ? 's' : ''} selected` : 'Select items to perform bulk actions'}
+                    </span>
+                    {selectedItemIds.size > 0 && (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          onClick={handleBulkDelete}
+                          disabled={bulkDeleting}
+                          style={{ background: 'var(--error)', color: '#fff', border: 'none', flexShrink: 0 }}
+                        >
+                          {bulkDeleting ? <span className="spinner" style={{ width: 13, height: 13 }} /> : <Trash2 size={13} />}
+                          Delete {selectedItemIds.size}
+                        </button>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelectedItemIds(new Set())} style={{ fontSize: 12, flexShrink: 0 }}>
+                          Clear
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 12 }}>
+                  {filteredMenuItems.length} of {menuItems.length} items
+                </p>
 
                 {showAddItem && (
                   <div className="card" style={{ padding: 20, marginBottom: 16, border: '1.5px solid var(--primary-light)' }}>
@@ -765,30 +981,94 @@ export default function AdminDashboard() {
                   </div>
                 )}
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {menuItems.map(item => (
-                    <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 'var(--radius-md)', transition: 'background var(--transition)', background: editingItem?.id === item.id ? 'var(--primary-subtle)' : 'transparent' }} onMouseEnter={e => { if (editingItem?.id !== item.id) e.currentTarget.style.background = 'var(--gray-50)'; }} onMouseLeave={e => { if (editingItem?.id !== item.id) e.currentTarget.style.background = 'transparent'; }}>
-                      {item.image ? <img src={item.image} alt={item.name} style={{ width: 44, height: 44, borderRadius: 'var(--radius-md)', objectFit: 'cover', flexShrink: 0 }} /> : <div style={{ width: 44, height: 44, borderRadius: 'var(--radius-md)', background: 'var(--gray-100)', flexShrink: 0 }} />}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontWeight: 600, fontSize: 14 }}>{item.name}</p>
-                        <p style={{ fontSize: 12, color: 'var(--gray-400)' }}>{item.vendor.name} · {item.onlineStock} in stock</p>
+                {filteredMenuItems.length === 0 ? (
+                  <div className="empty-state" style={{ padding: 40 }}>
+                    <Package className="empty-state-icon" />
+                    <h3>{menuItems.length === 0 ? 'No menu items yet' : 'No items match your filters'}</h3>
+                  </div>
+                ) : menuView === 'list' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {filteredMenuItems.map(item => (
+                      <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 'var(--radius-md)', transition: 'background var(--transition)', background: selectedItemIds.has(item.id) ? 'var(--primary-subtle)' : editingItem?.id === item.id ? 'var(--primary-subtle)' : 'transparent' }} onMouseEnter={e => { if (!selectedItemIds.has(item.id) && editingItem?.id !== item.id) e.currentTarget.style.background = 'var(--gray-50)'; }} onMouseLeave={e => { if (!selectedItemIds.has(item.id) && editingItem?.id !== item.id) e.currentTarget.style.background = 'transparent'; }}>
+                        <div style={{ overflow: 'hidden', maxWidth: selectMode ? 23 : 0, opacity: selectMode ? 1 : 0, transition: 'max-width 0.22s ease, opacity 0.18s ease', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedItemIds.has(item.id)}
+                            onChange={() => toggleSelectItem(item.id)}
+                            style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--primary)' }}
+                            onClick={e => e.stopPropagation()}
+                          />
+                        </div>
+                        {item.image ? <img src={item.image} alt={item.name} style={{ width: 44, height: 44, borderRadius: 'var(--radius-md)', objectFit: 'cover', flexShrink: 0 }} /> : <div style={{ width: 44, height: 44, borderRadius: 'var(--radius-md)', background: 'var(--gray-100)', flexShrink: 0 }} />}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontWeight: 600, fontSize: 14 }}>{item.name}</p>
+                          <p style={{ fontSize: 12, color: 'var(--gray-400)' }}>
+                            {item.vendor.name} · {item.onlineStock} in stock
+                            {item.category ? ` · ${CATEGORY_META[item.category]?.label ?? item.category}` : ''}
+                          </p>
+                        </div>
+                        <span style={{ fontWeight: 700, color: 'var(--primary)', fontSize: 14, flexShrink: 0 }}>₦{Number(item.price).toLocaleString()}</span>
+                        <span className={`badge ${item.status === 'AVAILABLE' ? 'badge-green' : 'badge-red'}`}>{item.status === 'AVAILABLE' ? 'Live' : 'Off'}</span>
+                        <button className="btn btn-ghost btn-icon-sm" onClick={() => toggleItem(item)} title="Toggle availability">
+                          {item.status === 'AVAILABLE' ? <ToggleRight size={20} color="var(--primary)" /> : <ToggleLeft size={20} color="var(--gray-400)" />}
+                        </button>
+                        <button className="btn btn-ghost btn-icon-sm" title="Edit item" onClick={() => setEditingItem(item)}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                        </button>
+                        <button className="btn btn-ghost btn-icon-sm" title="Delete item" style={{ color: 'var(--error)' }} onClick={() => handleDeleteItem(item.id, item.name)}>
+                          <Trash2 size={14} />
+                        </button>
                       </div>
-                      <span style={{ fontWeight: 700, color: 'var(--primary)', fontSize: 14, flexShrink: 0 }}>₦{Number(item.price).toLocaleString()}</span>
-                      <span className={`badge ${item.status === 'AVAILABLE' ? 'badge-green' : 'badge-red'}`}>{item.status === 'AVAILABLE' ? 'Live' : 'Off'}</span>
-                      <button className="btn btn-ghost btn-icon-sm" onClick={() => toggleItem(item)} title="Toggle availability">
-                        {item.status === 'AVAILABLE' ? <ToggleRight size={20} color="var(--primary)" /> : <ToggleLeft size={20} color="var(--gray-400)" />}
-                      </button>
-                      <button className="btn btn-ghost btn-icon-sm" title="Edit item" onClick={() => setEditingItem(item)}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                        </svg>
-                      </button>
-                      <button className="btn btn-ghost btn-icon-sm" title="Delete item" style={{ color: 'var(--error)' }} onClick={() => handleDeleteItem(item.id, item.name)}>
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 }}>
+                    {filteredMenuItems.map(item => (
+                      <div key={item.id} className="card" style={{ padding: 0, overflow: 'hidden', opacity: item.status === 'AVAILABLE' ? 1 : 0.65, outline: selectedItemIds.has(item.id) ? '2px solid var(--primary)' : 'none', outlineOffset: 1 }}>
+                        <div style={{ position: 'relative' }}>
+                          {item.image
+                            ? <img src={item.image} alt={item.name} style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block' }} />
+                            : <div style={{ width: '100%', height: 120, background: 'var(--gray-100)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Package size={28} color="var(--gray-300)" /></div>
+                          }
+                          <div style={{ position: 'absolute', top: 8, left: 8, opacity: selectMode ? 1 : 0, transform: selectMode ? 'scale(1)' : 'scale(0.5)', transition: 'opacity 0.2s ease, transform 0.2s ease', pointerEvents: selectMode ? 'auto' : 'none' }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedItemIds.has(item.id)}
+                              onChange={() => toggleSelectItem(item.id)}
+                              style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--primary)' }}
+                            />
+                          </div>
+                        </div>
+                        <div style={{ padding: '10px 12px 12px' }}>
+                          <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</p>
+                          <p style={{ fontSize: 11, color: 'var(--gray-400)', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {item.vendor.name}{item.category ? ` · ${CATEGORY_META[item.category]?.label ?? item.category}` : ''}
+                          </p>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                            <span style={{ fontWeight: 800, color: 'var(--primary)', fontSize: 14 }}>₦{Number(item.price).toLocaleString()}</span>
+                            <span className={`badge ${item.status === 'AVAILABLE' ? 'badge-green' : 'badge-red'}`} style={{ fontSize: 10 }}>{item.status === 'AVAILABLE' ? 'Live' : 'Off'}</span>
+                          </div>
+                          <p style={{ fontSize: 11, color: 'var(--gray-400)', marginBottom: 10 }}>{item.onlineStock} in stock</p>
+                          <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                            <button className="btn btn-ghost btn-icon-sm" onClick={() => toggleItem(item)} title="Toggle availability">
+                              {item.status === 'AVAILABLE' ? <ToggleRight size={18} color="var(--primary)" /> : <ToggleLeft size={18} color="var(--gray-400)" />}
+                            </button>
+                            <button className="btn btn-ghost btn-icon-sm" title="Edit item" onClick={() => setEditingItem(item)}>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                              </svg>
+                            </button>
+                            <button className="btn btn-ghost btn-icon-sm" title="Delete item" style={{ color: 'var(--error)' }} onClick={() => handleDeleteItem(item.id, item.name)}>
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
