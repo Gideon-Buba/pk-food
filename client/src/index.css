@@ -493,6 +493,12 @@ body.has-active-order-bar .cart-footer-sticky {
 .admin-backdrop    { display: block; }
 .admin-spacer      { display: none; }
 
+@media (max-width: 1023px) {
+  /* Sidebar must stop above the bottom nav (58px + safe-area) */
+  .admin-sidebar {
+    bottom: calc(58px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
 @media (min-width: 1024px) {
   .admin-sidebar    { transform: translateX(0) !important; }
   .admin-hamburger  { display: none !important; }
