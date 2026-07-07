@@ -11,7 +11,7 @@ import { randomBytes } from 'crypto';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import * as bcrypt from 'bcrypt';
-import * as nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
 import { Floor } from '@prisma/client';
@@ -37,22 +37,14 @@ const LOGO_DATA_URI = (() => {
 
 @Injectable()
 export class AuthService {
-  private readonly mailer: nodemailer.Transporter;
+  private readonly resend: Resend;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
   ) {
-    this.mailer = nodemailer.createTransport({
-      host: 'smtp-relay.brevo.com',
-      port: 587,
-      secure: false,
-      auth: {
-        user: this.config.smtpUser,
-        pass: this.config.smtpPass,
-      },
-    });
+    this.resend = new Resend(this.config.resendApiKey);
   }
 
   private emailShell(body: string): string {
@@ -93,7 +85,7 @@ export class AuthService {
 
   private async sendVerificationEmail(email: string, token: string): Promise<void> {
     const link = `${this.config.appUrl}/verify-email?token=${token}`;
-    await this.mailer.sendMail({
+    await this.resend.emails.send({
       from: this.config.emailFrom,
       to: email,
       subject: 'Verify your PK Food account',
@@ -222,7 +214,7 @@ export class AuthService {
 
     const link = `${this.config.appUrl}/reset-password?token=${resetToken}`;
 
-    await this.mailer.sendMail({
+    await this.resend.emails.send({
       from: this.config.emailFrom,
       to: email,
       subject: 'Reset your PK Food password',
