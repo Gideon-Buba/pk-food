@@ -987,40 +987,57 @@ export default function AdminDashboard() {
                   </div>
                 ) : menuView === 'list' ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {filteredMenuItems.map(item => (
-                      <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 'var(--radius-md)', transition: 'background var(--transition)', background: selectedItemIds.has(item.id) ? 'var(--primary-subtle)' : editingItem?.id === item.id ? 'var(--primary-subtle)' : 'transparent' }} onMouseEnter={e => { if (!selectedItemIds.has(item.id) && editingItem?.id !== item.id) e.currentTarget.style.background = 'var(--gray-50)'; }} onMouseLeave={e => { if (!selectedItemIds.has(item.id) && editingItem?.id !== item.id) e.currentTarget.style.background = 'transparent'; }}>
-                        <div style={{ overflow: 'hidden', maxWidth: selectMode ? 23 : 0, opacity: selectMode ? 1 : 0, transition: 'max-width 0.22s ease, opacity 0.18s ease', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-                          <input
-                            type="checkbox"
-                            checked={selectedItemIds.has(item.id)}
-                            onChange={() => toggleSelectItem(item.id)}
-                            style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--primary)' }}
-                            onClick={e => e.stopPropagation()}
-                          />
+                    {filteredMenuItems.map(item => {
+                      const isSelected = selectedItemIds.has(item.id);
+                      const isEditing  = editingItem?.id === item.id;
+                      return (
+                        <div
+                          key={item.id}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 'var(--radius-md)', transition: 'background var(--transition)', background: isSelected || isEditing ? 'var(--primary-subtle)' : 'transparent' }}
+                          onMouseEnter={e => { if (!isSelected && !isEditing) e.currentTarget.style.background = 'var(--gray-50)'; }}
+                          onMouseLeave={e => { if (!isSelected && !isEditing) e.currentTarget.style.background = 'transparent'; }}
+                        >
+                          {/* Checkbox — slides in when selectMode is on */}
+                          <div style={{ overflow: 'hidden', maxWidth: selectMode ? 23 : 0, opacity: selectMode ? 1 : 0, transition: 'max-width 0.22s ease, opacity 0.18s ease', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                            <input type="checkbox" checked={isSelected} onChange={() => toggleSelectItem(item.id)} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--primary)' }} onClick={e => e.stopPropagation()} />
+                          </div>
+
+                          {/* Thumbnail */}
+                          {item.image
+                            ? <img src={item.image} alt={item.name} style={{ width: 40, height: 40, borderRadius: 'var(--radius-sm)', objectFit: 'cover', flexShrink: 0 }} />
+                            : <div style={{ width: 40, height: 40, borderRadius: 'var(--radius-sm)', background: 'var(--gray-100)', flexShrink: 0 }} />
+                          }
+
+                          {/* Name + meta — takes all remaining space */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <p style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</p>
+                              <span className={`badge ${item.status === 'AVAILABLE' ? 'badge-green' : 'badge-red'}`} style={{ fontSize: 10, flexShrink: 0 }}>{item.status === 'AVAILABLE' ? 'Live' : 'Off'}</span>
+                            </div>
+                            <p style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 1 }}>
+                              <span style={{ fontWeight: 700, color: 'var(--primary)' }}>₦{Number(item.price).toLocaleString()}</span>
+                              {' · '}{item.vendor.name}{' · '}{item.onlineStock} in stock
+                              {item.category ? ` · ${CATEGORY_META[item.category]?.label ?? item.category}` : ''}
+                            </p>
+                          </div>
+
+                          {/* Actions */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+                            <button className="btn btn-ghost btn-icon-sm" onClick={() => toggleItem(item)} title="Toggle availability">
+                              {item.status === 'AVAILABLE' ? <ToggleRight size={20} color="var(--primary)" /> : <ToggleLeft size={20} color="var(--gray-400)" />}
+                            </button>
+                            <button className="btn btn-ghost btn-icon-sm" title="Edit" onClick={() => setEditingItem(item)}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                              </svg>
+                            </button>
+                            <button className="btn btn-ghost btn-icon-sm" title="Delete" style={{ color: 'var(--error)' }} onClick={() => handleDeleteItem(item.id, item.name)}>
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </div>
-                        {item.image ? <img src={item.image} alt={item.name} style={{ width: 44, height: 44, borderRadius: 'var(--radius-md)', objectFit: 'cover', flexShrink: 0 }} /> : <div style={{ width: 44, height: 44, borderRadius: 'var(--radius-md)', background: 'var(--gray-100)', flexShrink: 0 }} />}
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ fontWeight: 600, fontSize: 14 }}>{item.name}</p>
-                          <p style={{ fontSize: 12, color: 'var(--gray-400)' }}>
-                            {item.vendor.name} · {item.onlineStock} in stock
-                            {item.category ? ` · ${CATEGORY_META[item.category]?.label ?? item.category}` : ''}
-                          </p>
-                        </div>
-                        <span style={{ fontWeight: 700, color: 'var(--primary)', fontSize: 14, flexShrink: 0 }}>₦{Number(item.price).toLocaleString()}</span>
-                        <span className={`badge ${item.status === 'AVAILABLE' ? 'badge-green' : 'badge-red'}`}>{item.status === 'AVAILABLE' ? 'Live' : 'Off'}</span>
-                        <button className="btn btn-ghost btn-icon-sm" onClick={() => toggleItem(item)} title="Toggle availability">
-                          {item.status === 'AVAILABLE' ? <ToggleRight size={20} color="var(--primary)" /> : <ToggleLeft size={20} color="var(--gray-400)" />}
-                        </button>
-                        <button className="btn btn-ghost btn-icon-sm" title="Edit item" onClick={() => setEditingItem(item)}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                          </svg>
-                        </button>
-                        <button className="btn btn-ghost btn-icon-sm" title="Delete item" style={{ color: 'var(--error)' }} onClick={() => handleDeleteItem(item.id, item.name)}>
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 }}>
