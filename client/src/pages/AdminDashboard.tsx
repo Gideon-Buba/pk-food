@@ -466,7 +466,7 @@ export default function AdminDashboard() {
       <header className="nav-header">
         <div className="nav-inner">
           {/* Hamburger — mobile only */}
-          <button className="btn btn-ghost btn-icon-sm lg:hidden" onClick={() => setSidebarOpen(v => !v)}>
+          <button className="btn btn-ghost btn-icon-sm admin-hamburger" onClick={() => setSidebarOpen(v => !v)}>
             <Menu size={20} />
           </button>
           <span style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>Admin panel</span>
@@ -479,7 +479,7 @@ export default function AdminDashboard() {
         {/* Mobile backdrop */}
         {sidebarOpen && (
           <div
-            className="lg:hidden"
+            className="admin-backdrop"
             style={{ position: 'fixed', inset: 0, zIndex: 40, background: 'rgba(0,0,0,0.45)' }}
             onClick={() => setSidebarOpen(false)}
           />
@@ -487,19 +487,18 @@ export default function AdminDashboard() {
 
         {/* Sidebar */}
         <aside
-          className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
+          className={`admin-sidebar${sidebarOpen ? ' sidebar-open' : ''}`}
           style={{
             position: 'fixed', top: 60, bottom: 0, left: 0, zIndex: 50,
             width: 220, flexShrink: 0, overflowY: 'auto',
             background: 'var(--primary-darker)',
-            transition: 'transform 0.28s cubic-bezier(0.4,0,0.2,1)',
           }}
         >
           <SidebarContent />
         </aside>
 
         {/* Desktop spacer so content doesn't hide behind sidebar */}
-        <div className="hidden lg:block" style={{ width: 220, flexShrink: 0 }} />
+        <div className="admin-spacer" />
 
         {/* Main content */}
         <main style={{ flex: 1, minWidth: 0, padding: '24px', overflowX: 'hidden' }}>
@@ -614,7 +613,7 @@ export default function AdminDashboard() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
 
                 {/* KPI cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 14 }}>
+                <div className="admin-four-col" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
                   {[
                     { label: 'Total revenue',  value: `₦${revenue.toLocaleString()}`,       sub: `from ${paidOrders.length} paid orders`, color: '#2d6a4f', bg: '#f0faf5' },
                     { label: "Today's revenue", value: `₦${revenueToday.toLocaleString()}`,  sub: `${todayOrders.length} orders today`,    color: '#16a34a', bg: '#f0fdf4' },
@@ -664,7 +663,7 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Vendor bar + Status donut side by side */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 28 }}>
+                <div className="admin-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 28 }}>
 
                   {/* Vendor revenue - horizontal bar chart */}
                   <div>
