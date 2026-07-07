@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp, ImagePlus, X } from 'lucide-react';
+import { Menu, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp, ImagePlus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
 import type { ApiResponse, FoodCategory, MenuItem, Order, OrderStatus, Vendor } from '../types';
@@ -101,6 +101,7 @@ function statusBadgeClass(s: OrderStatus): string {
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>('orders');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -315,63 +316,148 @@ export default function AdminDashboard() {
   });
   const maxDay = Math.max(...last7.map(d => d.value), 1);
 
-  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: 'orders', label: 'Orders', icon: <ShoppingBag size={15} /> },
-    { id: 'revenue', label: 'Revenue', icon: <TrendingUp size={15} /> },
-    { id: 'menu', label: 'Menu', icon: <Package size={15} /> },
-    { id: 'vendors', label: 'Vendors', icon: <Store size={15} /> },
-    { id: 'announcements', label: 'Notices', icon: <Megaphone size={15} /> },
+  const NAV_ITEMS: { id: Tab; label: string; Icon: React.ElementType }[] = [
+    { id: 'orders',        label: 'Orders',    Icon: ShoppingBag },
+    { id: 'revenue',       label: 'Revenue',   Icon: TrendingUp  },
+    { id: 'menu',          label: 'Menu',      Icon: Package     },
+    { id: 'vendors',       label: 'Vendors',   Icon: Store       },
+    { id: 'announcements', label: 'Notices',   Icon: Megaphone   },
   ];
 
+  const goTab = (t: Tab) => { setTab(t); setSidebarOpen(false); };
+
+  const SidebarContent = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Sidebar header */}
+      <div style={{ padding: '24px 20px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <img src="/logo.jpeg" alt="PK Food" style={{ height: 34, width: 'auto', borderRadius: 6 }}
+            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          <div>
+            <p style={{ color: '#fff', fontSize: 14, fontWeight: 700, lineHeight: 1.2 }}>PK Food</p>
+            <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Admin Panel</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Nav items */}
+      <nav style={{ flex: 1, padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {NAV_ITEMS.map(({ id, label, Icon }) => {
+          const active = tab === id;
+          return (
+            <button
+              key={id}
+              onClick={() => goTab(id)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 11,
+                padding: '10px 12px', borderRadius: 'var(--radius-md)',
+                border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left',
+                fontFamily: 'inherit', fontSize: 13, fontWeight: active ? 600 : 500,
+                background: active ? 'rgba(255,255,255,0.14)' : 'transparent',
+                color: active ? '#fff' : 'rgba(255,255,255,0.62)',
+                transition: 'all var(--transition)',
+                boxShadow: active ? 'inset 0 0 0 1px rgba(255,255,255,0.1)' : 'none',
+              }}
+              onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; e.currentTarget.style.color = '#fff'; }}
+              onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.62)'; } }}
+            >
+              <Icon size={16} />
+              {label}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Sidebar footer */}
+      <div style={{ padding: '16px 12px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <button
+          className="btn btn-ghost"
+          onClick={load}
+          style={{ width: '100%', color: 'rgba(255,255,255,0.5)', fontSize: 12, gap: 8, justifyContent: 'flex-start' }}
+        >
+          {loading ? <span className="spinner" style={{ width: 13, height: 13 }} /> : <RefreshCw size={13} />}
+          Refresh data
+        </button>
+        <button
+          className="btn btn-ghost"
+          onClick={() => navigate('/menu')}
+          style={{ width: '100%', color: 'rgba(255,255,255,0.35)', fontSize: 12, gap: 8, justifyContent: 'flex-start' }}
+        >
+          Back to Menu
+        </button>
+      </div>
+    </div>
+  );
+
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
+    <div style={{ background: 'var(--gray-50)', minHeight: '100dvh' }}>
+      {/* Header */}
       <header className="nav-header">
         <div className="nav-inner">
-          <button className="btn btn-ghost btn-icon-sm" onClick={() => navigate('/menu')}><ChevronLeft size={20} /></button>
-          <span style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>Admin panel</span>
-          <button className="btn btn-ghost btn-icon" onClick={load} title="Refresh">
-            {loading ? <span className="spinner spinner-dark" /> : <RefreshCw size={16} />}
+          {/* Hamburger — mobile only */}
+          <button className="btn btn-ghost btn-icon-sm lg:hidden" onClick={() => setSidebarOpen(v => !v)}>
+            <Menu size={20} />
           </button>
+          <span style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>Admin panel</span>
         </div>
       </header>
 
-      <div className="page-wrap">
-        {/* Stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 20 }}>
-          {[
-            { label: 'Total revenue', value: `₦${revenue.toLocaleString()}`, sub: `₦${revenueToday.toLocaleString()} today`, color: 'var(--primary)' },
-            { label: 'Avg order value', value: `₦${avgOrder.toLocaleString()}`, sub: `${paidOrders.length} paid orders`, color: 'var(--info)' },
-            { label: 'Active orders', value: active, sub: `${pending} pending`, color: 'var(--warning)' },
-            { label: 'Delivered', value: delivered, sub: `${cancelled} cancelled`, color: '#16a34a' },
-          ].map(s => (
-            <div key={s.label} className="card" style={{ padding: '16px 20px' }}>
-              <p style={{ fontSize: 12, color: 'var(--gray-400)', fontWeight: 500, marginBottom: 4 }}>{s.label}</p>
-              <p style={{ fontSize: 22, fontWeight: 800, color: s.color, letterSpacing: '-0.03em' }}>{s.value}</p>
-              <p style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 2 }}>{s.sub}</p>
-            </div>
-          ))}
-        </div>
+      {/* Body: sidebar + main */}
+      <div style={{ display: 'flex' }}>
 
-        {/* Tabs */}
-        <div className="card" style={{ overflow: 'hidden' }}>
-          <div style={{ display: 'flex', borderBottom: '1px solid var(--gray-100)' }}>
-            {tabs.map(t => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                style={{
-                  flex: 1, padding: '14px 16px', border: 'none', background: 'none', cursor: 'pointer',
-                  fontSize: 13, fontWeight: 600, color: tab === t.id ? 'var(--primary)' : 'var(--gray-500)',
-                  borderBottom: `2px solid ${tab === t.id ? 'var(--primary)' : 'transparent'}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  transition: 'all var(--transition)', fontFamily: 'inherit',
-                }}
-              >
-                {t.icon} {t.label}
-              </button>
+        {/* Mobile backdrop */}
+        {sidebarOpen && (
+          <div
+            className="lg:hidden"
+            style={{ position: 'fixed', inset: 0, zIndex: 40, background: 'rgba(0,0,0,0.45)' }}
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        {/* Sidebar */}
+        <aside
+          className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
+          style={{
+            position: 'fixed', top: 60, bottom: 0, left: 0, zIndex: 50,
+            width: 220, flexShrink: 0, overflowY: 'auto',
+            background: 'var(--primary-darker)',
+            transition: 'transform 0.28s cubic-bezier(0.4,0,0.2,1)',
+          }}
+        >
+          <SidebarContent />
+        </aside>
+
+        {/* Desktop spacer so content doesn't hide behind sidebar */}
+        <div className="hidden lg:block" style={{ width: 220, flexShrink: 0 }} />
+
+        {/* Main content */}
+        <main style={{ flex: 1, minWidth: 0, padding: '24px', overflowX: 'hidden' }}>
+
+          {/* Stats strip */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 24 }}>
+            {[
+              { label: 'Total revenue',   value: `₦${revenue.toLocaleString()}`,    sub: `₦${revenueToday.toLocaleString()} today`,  color: 'var(--primary)' },
+              { label: 'Avg order value', value: `₦${avgOrder.toLocaleString()}`,    sub: `${paidOrders.length} paid orders`,          color: 'var(--info)'    },
+              { label: 'Active orders',   value: active,                             sub: `${pending} pending`,                        color: 'var(--warning)' },
+              { label: 'Delivered',       value: delivered,                          sub: `${cancelled} cancelled`,                    color: '#16a34a'        },
+            ].map(s => (
+              <div key={s.label} className="card" style={{ padding: '16px 20px' }}>
+                <p style={{ fontSize: 12, color: 'var(--gray-400)', fontWeight: 500, marginBottom: 4 }}>{s.label}</p>
+                <p style={{ fontSize: 22, fontWeight: 800, color: s.color, letterSpacing: '-0.03em' }}>{s.value}</p>
+                <p style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 2 }}>{s.sub}</p>
+              </div>
             ))}
           </div>
 
+          {/* Section heading */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <h2 style={{ fontWeight: 700, fontSize: 15, color: 'var(--gray-800)' }}>
+              {NAV_ITEMS.find(n => n.id === tab)?.label}
+            </h2>
+          </div>
+
+          {/* Tab content card */}
+          <div className="card" style={{ overflow: 'hidden' }}>
           <div style={{ padding: 20 }}>
             {/* Orders tab */}
             {tab === 'orders' && (
@@ -839,7 +925,8 @@ export default function AdminDashboard() {
               </div>
             )}
           </div>
-        </div>
+          </div>
+        </main>
       </div>
     </div>
   );
