@@ -17,16 +17,28 @@ export default function OrderConfirmation() {
 
   useEffect(() => {
     if (!reference) { setState('failed'); setMessage('No payment reference found.'); return; }
-    api.get<ApiResponse<VerifyResult>>(`/payments/verify/${reference}`)
-      .then(({ data }) => {
-        if (data.data.paid) setState('success');
-        else { setState('failed'); setMessage(`Payment status: ${data.data.status}`); }
-      })
-      .catch((err: unknown) => {
+
+    const verify = async (attempt: number): Promise<void> => {
+      try {
+        const { data } = await api.get<ApiResponse<VerifyResult>>(`/payments/verify/${reference}`);
+        if (data.data.paid) {
+          setState('success');
+        } else if (attempt < 4 && data.data.status === 'pending') {
+          // Paystack redirects before their API reflects success — retry with backoff
+          await new Promise(r => setTimeout(r, attempt * 1500));
+          return verify(attempt + 1);
+        } else {
+          setState('failed');
+          setMessage(`Payment status: ${data.data.status}`);
+        }
+      } catch (err: unknown) {
         const e = err as { response?: { data?: { message?: string } } };
         setState('failed');
         setMessage(e.response?.data?.message ?? 'Could not verify payment.');
-      });
+      }
+    };
+
+    verify(1);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

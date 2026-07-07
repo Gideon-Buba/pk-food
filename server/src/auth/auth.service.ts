@@ -172,13 +172,18 @@ export class AuthService {
     if (!user || !user.verifyTokenExpiry) {
       throw new NotFoundException('Invalid or expired verification link');
     }
+
+    // Idempotent — already verified by a previous call (e.g. double-click, redirect loop)
+    if (user.emailVerified) return;
+
     if (user.verifyTokenExpiry < new Date()) {
       throw new UnauthorizedException('Verification link has expired — please register again');
     }
 
+    // Keep the token in DB so duplicate calls in the same session still find the user
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { emailVerified: true, verifyToken: null, verifyTokenExpiry: null },
+      data: { emailVerified: true },
     });
   }
 
