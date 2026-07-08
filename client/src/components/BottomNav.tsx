@@ -14,10 +14,10 @@ const STAFF_TABS: TabDef[] = [
 ];
 
 const ADMIN_TABS: TabDef[] = [
-  { label: 'Menu',    Icon: UtensilsCrossed, path: '/menu'    },
-  { label: 'Queue',   Icon: Bike,            path: '/runner'  },
-  { label: 'Admin',   Icon: Settings,        path: '/admin'   },
-  { label: 'Profile', Icon: User,            path: '/profile' },
+  { label: 'Menu',    Icon: UtensilsCrossed, path: '/menu'           },
+  { label: 'Queue',   Icon: Bike,            path: '/admin?tab=queue' },
+  { label: 'Admin',   Icon: Settings,        path: '/admin'          },
+  { label: 'Profile', Icon: User,            path: '/profile'        },
 ];
 
 const RUNNER_TABS: TabDef[] = [
@@ -56,8 +56,8 @@ function useActiveOrderCount(role: string) {
 }
 
 export default function BottomNav() {
-  const { pathname } = useLocation();
-  const navigate     = useNavigate();
+  const { pathname, search } = useLocation();
+  const navigate             = useNavigate();
 
   const token = getToken();
   let role = '';
@@ -73,7 +73,16 @@ export default function BottomNav() {
   return (
     <nav className="bottom-nav" role="navigation" aria-label="Main navigation">
       {tabs.map(({ label, Icon, path }) => {
-        const active     = pathname === path || pathname.startsWith(path + '/');
+        const [tabPath, tabQuery] = path.split('?');
+        const pathMatch  = pathname === tabPath || pathname.startsWith(tabPath + '/');
+        // If this tab has a query requirement, the URL must match it exactly.
+        // If another tab has a query requirement for the same path, this tab is inactive.
+        const hasQuery   = Boolean(tabQuery);
+        const queryMatch = hasQuery ? search === `?${tabQuery}` : !tabs.some(t => {
+          const [tp, tq] = t.path.split('?');
+          return tq && tp === tabPath && search === `?${tq}`;
+        });
+        const active     = pathMatch && queryMatch;
         const showBadge  = path === '/orders' && activeOrderCount > 0;
 
         return (

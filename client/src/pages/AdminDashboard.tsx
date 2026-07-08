@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Menu, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp, ImagePlus, X, LayoutGrid, LayoutList, Search } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Menu, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp, ImagePlus, X, LayoutGrid, LayoutList, Search, Truck } from 'lucide-react';
+import QueuePanel from '../components/QueuePanel';
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
 import type { ApiResponse, FoodCategory, MenuItem, Order, OrderStatus, Vendor } from '../types';
@@ -73,7 +74,7 @@ function ImageUploader({ value, onChange }: ImageUploaderProps) {
   );
 }
 
-type Tab = 'orders' | 'menu' | 'vendors' | 'announcements' | 'revenue';
+type Tab = 'orders' | 'menu' | 'vendors' | 'announcements' | 'revenue' | 'queue';
 
 interface Announcement {
   id: string;
@@ -99,9 +100,20 @@ function statusBadgeClass(s: OrderStatus): string {
   return m[s];
 }
 
+const VALID_TABS: Tab[] = ['orders', 'revenue', 'menu', 'vendors', 'announcements', 'queue'];
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>('orders');
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(() => {
+    const t = searchParams.get('tab');
+    return VALID_TABS.includes(t as Tab) ? (t as Tab) : 'orders';
+  });
+
+  useEffect(() => {
+    const t = searchParams.get('tab');
+    if (VALID_TABS.includes(t as Tab)) setTab(t as Tab);
+  }, [searchParams]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -389,6 +401,7 @@ export default function AdminDashboard() {
 
   const NAV_ITEMS: { id: Tab; label: string; Icon: React.ElementType }[] = [
     { id: 'orders',        label: 'Orders',    Icon: ShoppingBag },
+    { id: 'queue',         label: 'Queue',     Icon: Truck       },
     { id: 'revenue',       label: 'Revenue',   Icon: TrendingUp  },
     { id: 'menu',          label: 'Menu',      Icon: Package     },
     { id: 'vendors',       label: 'Vendors',   Icon: Store       },
@@ -510,8 +523,11 @@ export default function AdminDashboard() {
             </h2>
           </div>
 
-          {/* Tab content card */}
-          <div className="card" style={{ overflow: 'hidden' }}>
+          {/* Queue tab — full-width, no card wrapper */}
+          {tab === 'queue' && <QueuePanel />}
+
+          {/* All other tabs inside the card */}
+          {tab !== 'queue' && <div className="card" style={{ overflow: 'hidden' }}>
           <div style={{ padding: 20 }}>
             {/* Orders tab */}
             {tab === 'orders' && (
@@ -1221,7 +1237,8 @@ export default function AdminDashboard() {
               </div>
             )}
           </div>
-          </div>
+          </div>}
+
         </main>
       </div>
     </div>
