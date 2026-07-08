@@ -19,7 +19,7 @@ const VALID_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
 };
 
 const orderInclude = {
-  items: { include: { menuItem: true } },
+  items: { include: { menuItem: { include: { vendor: true } } } },
   user: { select: { name: true, email: true, floor: true, officeNumber: true } },
 } satisfies Prisma.OrderInclude;
 
