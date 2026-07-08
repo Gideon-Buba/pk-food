@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Server: typecheck + unit tests ────────────────────────────────────────
+  server:
+    name: Server
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+
+    env:
+      NODE_ENV: test
+      # Fake values — unit tests use mocks; no real DB or API is contacted
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pkfood_test
+      JWT_SECRET: ci-test-secret-not-for-production
+      RESEND_API_KEY: re_test_key
+      PAYSTACK_SECRET_KEY: sk_test_key
+      PAYSTACK_PUBLIC_KEY: pk_test_key
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm test -- --forceExit --passWithNoTests
+
+  # ── Client: typecheck + production build ──────────────────────────────────
+  client:
+    name: Client
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Production build
+        run: npm run build
+
+  # ── Deploy: SSH to VPS (runs only on main after both jobs pass) ───────────
+  # To enable: add these secrets in Settings → Secrets → Actions:
+  #   VPS_HOST    — IP or hostname of your Ubuntu VPS
+  #   VPS_USER    — SSH username (e.g. ubuntu)
+  #   VPS_SSH_KEY — contents of your private key (~/.ssh/id_rsa)
+  #
+  # deploy:
+  #   name: Deploy to VPS
+  #   needs: [server, client]
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Deploy via SSH
+  #       uses: appleboy/ssh-action@v1
+  #       with:
+  #         host: ${{ secrets.VPS_HOST }}
+  #         username: ${{ secrets.VPS_USER }}
+  #         key: ${{ secrets.VPS_SSH_KEY }}
+  #         script: |
+  #           cd ~/apps/pk-food
+  #           git pull
+  #           cd server && npm ci --omit=dev && npm run build
+  #           pm2 restart pk-food-server --update-env
+  #           cd ../client && npm ci && npm run build
