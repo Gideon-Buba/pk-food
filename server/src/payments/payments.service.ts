@@ -10,6 +10,7 @@ import { createHmac } from 'crypto';
 import axios from 'axios';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
+import { OrdersService } from '../orders/orders.service';
 import { InitializePaymentDto } from './dto/initialize-payment.dto';
 
 export interface PaystackInitData {
@@ -55,6 +56,7 @@ export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly ordersService: OrdersService,
   ) {}
 
   private get authHeader(): string {
@@ -112,7 +114,12 @@ export class PaymentsService {
 
   async verifyPayment(
     reference: string,
+    userId: string,
   ): Promise<{ paid: boolean; status: string }> {
+    const order = await this.prisma.order.findFirst({ where: { paystackRef: reference } });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.userId !== userId) throw new ForbiddenException();
+
     const response = await axios.get<PaystackVerifyResponse>(
       `${this.paystackBase}/transaction/verify/${reference}`,
       { headers: { Authorization: this.authHeader } },
@@ -126,6 +133,16 @@ export class PaymentsService {
         where: { paystackRef: reference, paid: false },
         data: { paid: true, status: 'CONFIRMED' },
       });
+    } else if (txStatus === 'abandoned' || txStatus === 'failed') {
+      const order = await this.prisma.order.findFirst({
+        where: { paystackRef: reference, paid: false },
+      });
+      if (order) {
+        await this.prisma.$transaction(async (tx) => {
+          await this.ordersService.restoreStock(order.id, tx);
+          await tx.order.update({ where: { id: order.id }, data: { status: 'CANCELLED' } });
+        });
+      }
     }
 
     return { paid, status: txStatus };

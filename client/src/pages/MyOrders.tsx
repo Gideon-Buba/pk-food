@@ -31,6 +31,10 @@ export default function MyOrders() {
       .finally(() => setLoading(false));
   };
 
+  const handleCancelled = (id: string) => {
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'CANCELLED' as const } : o));
+  };
+
   useEffect(() => { load(); }, []);
 
   const active = orders.filter(o => o.status !== 'DELIVERED' && o.status !== 'CANCELLED');
@@ -78,6 +82,7 @@ export default function MyOrders() {
                       order={order}
                       expanded={expanded === order.id}
                       onToggle={() => setExpanded(expanded === order.id ? null : order.id)}
+                      onCancelled={handleCancelled}
                     />
                   ))}
                 </div>
@@ -93,6 +98,7 @@ export default function MyOrders() {
                       order={order}
                       expanded={expanded === order.id}
                       onToggle={() => setExpanded(expanded === order.id ? null : order.id)}
+                      onCancelled={handleCancelled}
                     />
                   ))}
                 </div>
@@ -105,10 +111,27 @@ export default function MyOrders() {
   );
 }
 
-function OrderCard({ order, expanded, onToggle }: { order: Order; expanded: boolean; onToggle: () => void }) {
+function OrderCard({ order, expanded, onToggle, onCancelled }: { order: Order; expanded: boolean; onToggle: () => void; onCancelled: (id: string) => void }) {
+  const [cancelling, setCancelling] = useState(false);
   const meta = STATUS_META[order.status];
   const total = Number(order.deliveryFee) + order.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0);
   const isActive = order.status !== 'DELIVERED' && order.status !== 'CANCELLED';
+  const canCancel = order.status === 'PENDING' && !order.paid;
+
+  const handleCancel = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Cancel this order?')) return;
+    setCancelling(true);
+    try {
+      await api.delete(`/orders/${order.id}`);
+      toast.success('Order cancelled');
+      onCancelled(order.id);
+    } catch {
+      toast.error('Could not cancel order');
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
@@ -210,11 +233,23 @@ function OrderCard({ order, expanded, onToggle }: { order: Order; expanded: bool
             </div>
           </div>
 
-          {isActive && (
-            <p style={{ marginTop: 14, fontSize: 12, color: 'var(--gray-400)', display: 'flex', alignItems: 'center', gap: 5 }}>
-              <Clock size={11} /> Pull down to refresh for latest status
-            </p>
-          )}
+          <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            {isActive && (
+              <p style={{ fontSize: 12, color: 'var(--gray-400)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <Clock size={11} /> Pull down to refresh for latest status
+              </p>
+            )}
+            {canCancel && (
+              <button
+                onClick={handleCancel}
+                disabled={cancelling}
+                style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: 'var(--error)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, opacity: cancelling ? 0.6 : 1 }}
+              >
+                {cancelling ? <span className="spinner" style={{ width: 11, height: 11 }} /> : <XCircle size={13} />}
+                Cancel order
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

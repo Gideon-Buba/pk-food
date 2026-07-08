@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   UseGuards,
@@ -59,10 +60,17 @@ export class OrdersController {
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.RUNNER)
   async updateStatus(
+    @CurrentUser() user: User,
     @Param('id') id: string,
     @Body() dto: UpdateOrderStatusDto,
   ) {
-    const data = await this.ordersService.updateStatus(id, dto);
+    const data = await this.ordersService.updateStatus(id, dto, user.role);
     return { data, message: 'Order status updated' };
+  }
+
+  @Delete(':id')
+  async cancelOrder(@CurrentUser() user: User, @Param('id') id: string) {
+    const data = await this.ordersService.cancelOrder(id, user.id);
+    return { data, message: 'Order cancelled' };
   }
 }

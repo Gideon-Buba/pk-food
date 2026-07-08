@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import * as dotenv from 'dotenv';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 // Load root .env (monorepo) then fall back to server-local .env
 dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
@@ -13,6 +14,8 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { rawBody: true });
 
   app.enableCors({ origin: process.env['APP_URL'] ?? 'http://localhost:5173' });
+
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   app.useGlobalPipes(
     new ValidationPipe({

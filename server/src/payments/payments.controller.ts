@@ -20,8 +20,8 @@ export class PaymentsController {
   }
 
   @Get('verify/:reference')
-  async verify(@Param('reference') reference: string) {
-    const data = await this.paymentsService.verifyPayment(reference);
+  async verify(@CurrentUser() user: User, @Param('reference') reference: string) {
+    const data = await this.paymentsService.verifyPayment(reference, user.id);
     return { data, message: data.paid ? 'Payment verified' : 'Payment not confirmed' };
   }
 }

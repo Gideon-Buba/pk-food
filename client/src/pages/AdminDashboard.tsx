@@ -334,7 +334,7 @@ export default function AdminDashboard() {
       });
     });
   });
-  const topItems = [...itemSales.values()].sort((a, b) => b.qty - a.qty).slice(0, 5);
+  const topItems = [...itemSales.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 5);
 
   // Vendor performance
   const vendorStats = new Map<string, { name: string; orders: number; revenue: number; qty: number }>();
@@ -565,7 +565,7 @@ export default function AdminDashboard() {
                           const total = Number(order.deliveryFee) + order.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0);
                           return (
                             <tr key={order.id}>
-                              <td style={{ fontWeight: 500 }}>{order.user.email.split('@')[0]}</td>
+                              <td style={{ fontWeight: 500 }}>{order.user.name || order.user.email.split('@')[0]}</td>
                               <td style={{ color: 'var(--gray-500)', fontSize: 13 }}>{order.floor}, {order.officeNumber}</td>
                               <td style={{ fontSize: 13, color: 'var(--gray-600)', maxWidth: 200 }}>
                                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
