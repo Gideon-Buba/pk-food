@@ -32,22 +32,28 @@ const TEST_ACCOUNTS = [
 
 const SLIDES = [
   {
-    photo:   '/canteen.webp',
-    line1:   'Meals Delivered to',
-    line2:   'Your Workspace',
-    tagline: 'Order from your office and have freshly prepared meals delivered directly to your desk.',
+    photo:    '/canteen.webp',
+    bgPos:    'center 60%',
+    bgSize:   'cover',
+    line1:    'Meals Delivered to',
+    line2:    'Your Workspace',
+    tagline:  'Order from your office and have freshly prepared meals delivered directly to your desk.',
   },
   {
-    photo:   '/canteen-2.webp',
-    line1:   'Designed for',
-    line2:   'Better Breaks',
-    tagline: 'Step away from your desk and enjoy freshly prepared meals in a professional dining environment.',
+    photo:    '/canteen-2.webp',
+    bgPos:    'center 35%',
+    bgSize:   'cover',
+    line1:    'Designed for',
+    line2:    'Better Breaks',
+    tagline:  'Step away from your desk and enjoy freshly prepared meals in a professional dining environment.',
   },
   {
-    photo:   '/canteen-3.webp',
-    line1:   'Explore',
-    line2:   "Today's Menu",
-    tagline: 'Browse available meals, compare options, and place your order in just a few clicks.',
+    photo:    '/canteen-3.webp',
+    bgPos:    'center 35%',
+    bgSize:   'cover',
+    line1:    'Explore',
+    line2:    "Today's Menu",
+    tagline:  'Browse available meals, compare options, and place your order in just a few clicks.',
   },
 ];
 
@@ -157,8 +163,9 @@ export default function Login() {
           <div key={slide.photo} style={{
             position: 'absolute', inset: 0,
             backgroundImage: `url(${slide.photo})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center 35%',
+            backgroundSize: slide.bgSize,
+            backgroundPosition: slide.bgPos,
+            backgroundRepeat: 'no-repeat',
             opacity: i === photoIdx ? 1 : 0,
             transition: 'opacity 1.2s ease',
           }} />
@@ -416,8 +423,9 @@ export default function Login() {
           <div key={slide.photo} style={{
             position: 'absolute', inset: 0,
             backgroundImage: `url(${slide.photo})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center 35%',
+            backgroundSize: slide.bgSize,
+            backgroundPosition: slide.bgPos,
+            backgroundRepeat: 'no-repeat',
             opacity: i === photoIdx ? 1 : 0,
             transition: 'opacity 1.2s ease',
           }} />
