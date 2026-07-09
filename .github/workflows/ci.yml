@@ -83,6 +83,6 @@ jobs:
           script: |
             cd ~/apps/pk-food
             git pull
-            cd server && npm ci --omit=dev && npx prisma generate && npm run build
+            cd server && npm ci && npx prisma generate && npm run build
             pm2 restart pk-food-server --update-env
             cd ../client && npm ci && npm run build
