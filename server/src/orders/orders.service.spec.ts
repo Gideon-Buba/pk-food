@@ -8,6 +8,7 @@ import { ItemStatus, OrderStatus, Role } from '@prisma/client';
 import { OrdersService } from './orders.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 // Build lightweight mock objects that match what the service code reads
 function mockMenuItem(overrides: Record<string, unknown> = {}) {
@@ -90,6 +91,7 @@ describe('OrdersService', () => {
         OrdersService,
         { provide: PrismaService, useValue: prisma },
         { provide: ConfigService, useValue: mockConfig },
+        { provide: NotificationsService, useValue: { notifyNewOrder: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 

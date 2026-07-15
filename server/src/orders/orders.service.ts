@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ForbiddenException,
@@ -7,6 +8,7 @@ import {
 import { ItemStatus, Order, OrderStatus, Prisma, Role, User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 
@@ -27,13 +29,16 @@ type OrderWithRelations = Prisma.OrderGetPayload<{ include: typeof orderInclude 
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async createOrder(user: User, dto: CreateOrderDto): Promise<Order> {
-    return this.prisma.$transaction(async (tx) => {
+    const order = await this.prisma.$transaction(async (tx) => {
       const menuItemIds = dto.items.map((i) => i.menuItemId);
       const menuItems = await tx.menuItem.findMany({
         where: { id: { in: menuItemIds } },
@@ -85,6 +90,13 @@ export class OrdersService {
         include: { items: { include: { menuItem: true } }, user: true },
       });
     }, { timeout: 15000 });
+
+    // Fire-and-forget: notification errors must never fail order creation.
+    void this.notifications.notifyNewOrder(order.id).catch((err: unknown) => {
+      this.logger.error('New-order notification failed:', err);
+    });
+
+    return order;
   }
 
   async findAll(user: User): Promise<OrderWithRelations[]> {

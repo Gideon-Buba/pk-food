@@ -23,6 +23,9 @@ jobs:
       RESEND_API_KEY: re_test_key
       PAYSTACK_SECRET_KEY: sk_test_key
       PAYSTACK_PUBLIC_KEY: pk_test_key
+      VAPID_PUBLIC_KEY: BNGuIVR-ZHt-SsOssfRqmHZyb5Xb6pLJUE1cvxVqyDfi_WXKFGtZZhsjZeKMyTGTG7NPvgOqaHZkUPBxJJ9oHrA
+      VAPID_PRIVATE_KEY: ci-fake-vapid-private-key
+      TELEGRAM_BOT_TOKEN: 000000000:ci_fake_token
 
     steps:
       - uses: actions/checkout@v4
@@ -83,6 +86,7 @@ jobs:
           script: |
             cd ~/apps/pk-food
             git pull
-            cd server && npm ci && npx prisma generate && npm run build
+            set -a; source .env; set +a
+            cd server && npm ci && npx prisma generate && npx prisma migrate deploy && npm run build
             pm2 restart pk-food-server --update-env
             cd ../client && npm ci && npm run build

@@ -1,6 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building2, Lock, Phone, User as UserIcon, ClipboardList, LogOut, ChevronRight, History } from 'lucide-react';
+import {
+  ArrowLeft,
+  Building2,
+  Lock,
+  Phone,
+  User as UserIcon,
+  ClipboardList,
+  LogOut,
+  ChevronRight,
+  History,
+  Send,
+  ExternalLink,
+  CheckCircle2,
+} from 'lucide-react';
 import { clearToken } from '../api/client';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
@@ -11,15 +24,25 @@ import { FLOORS } from '../constants/floors';
 import type { FloorValue } from '../constants/floors';
 import type { ApiResponse, User } from '../types';
 
+interface TelegramLinkData {
+  token: string;
+  botUrl: string | null;
+  instructions: string;
+}
+
 export default function Profile() {
   const navigate = useNavigate();
-  const [user, setUser]     = useState<User | null>(null);
-  const [name, setName]           = useState('');
-  const [phone, setPhone]         = useState('');
-  const [floor, setFloor]         = useState<FloorValue | ''>('');
-  const [officeNumber, setOffice] = useState('');
-  const [loading, setLoading]     = useState(true);
-  const [saving, setSaving]       = useState(false);
+  const [user, setUser]               = useState<User | null>(null);
+  const [name, setName]               = useState('');
+  const [phone, setPhone]             = useState('');
+  const [floor, setFloor]             = useState<FloorValue | ''>('');
+  const [officeNumber, setOffice]     = useState('');
+  const [loading, setLoading]         = useState(true);
+  const [saving, setSaving]           = useState(false);
+
+  // Telegram linking state
+  const [telegramLink, setTelegramLink]   = useState<TelegramLinkData | null>(null);
+  const [telegramLoading, setTelegramLoading] = useState(false);
 
   useEffect(() => {
     api.get<ApiResponse<User>>('/auth/me')
@@ -54,9 +77,37 @@ export default function Profile() {
     }
   };
 
+  const handleGenerateTelegramLink = async () => {
+    setTelegramLoading(true);
+    try {
+      const res = await api.post<ApiResponse<TelegramLinkData>>('/telegram/generate-link');
+      setTelegramLink(res.data.data);
+    } catch {
+      toast.error('Could not generate Telegram link');
+    } finally {
+      setTelegramLoading(false);
+    }
+  };
+
+  const handleUnlinkTelegram = async () => {
+    setTelegramLoading(true);
+    try {
+      await api.delete('/telegram/link');
+      setUser((prev) => prev ? { ...prev, telegramChatId: null } : prev);
+      setTelegramLink(null);
+      toast.success('Telegram account unlinked');
+    } catch {
+      toast.error('Could not unlink Telegram');
+    } finally {
+      setTelegramLoading(false);
+    }
+  };
+
   const initials = name
     ? name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
     : user?.email?.[0]?.toUpperCase() ?? '?';
+
+  const telegramLinked = Boolean(user?.telegramChatId);
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
@@ -96,7 +147,7 @@ export default function Profile() {
               <p style={{ fontSize: 13, color: 'var(--gray-500)' }}>{user?.email}</p>
             </div>
 
-            {/* Form card */}
+            {/* Profile form card */}
             <div className="card" style={{ padding: 24 }}>
               <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
@@ -196,6 +247,117 @@ export default function Profile() {
                 </div>
               </div>
             </div>
+
+            {/* Telegram linking card — shown only to ADMIN and RUNNER */}
+            {(user?.role === 'ADMIN' || user?.role === 'RUNNER') && (
+              <div className="card" style={{ padding: 20, marginTop: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 8,
+                    background: telegramLinked ? 'var(--success-bg, #e8f5ee)' : 'var(--gray-100)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    {telegramLinked
+                      ? <CheckCircle2 size={16} color="var(--primary)" />
+                      : <Send size={15} color="var(--gray-500)" />}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--gray-900)', margin: '0 0 2px' }}>
+                      Telegram notifications
+                    </p>
+                    <p style={{ fontSize: 12, color: 'var(--gray-400)', margin: 0 }}>
+                      {telegramLinked
+                        ? 'Your Telegram account is linked. You will receive order alerts.'
+                        : 'Link your Telegram to receive order alerts, even when the app is closed.'}
+                    </p>
+                  </div>
+                </div>
+
+                {telegramLinked ? (
+                  <button
+                    onClick={handleUnlinkTelegram}
+                    disabled={telegramLoading}
+                    style={{
+                      width: '100%', padding: '9px 0', borderRadius: 8,
+                      border: '1px solid var(--gray-200)', background: 'none',
+                      fontSize: 13, fontWeight: 500, color: 'var(--error)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {telegramLoading ? 'Unlinking…' : 'Unlink Telegram'}
+                  </button>
+                ) : (
+                  <>
+                    {!telegramLink ? (
+                      <button
+                        onClick={handleGenerateTelegramLink}
+                        disabled={telegramLoading}
+                        style={{
+                          width: '100%', padding: '9px 0', borderRadius: 8,
+                          border: '1px solid var(--primary)', background: 'none',
+                          fontSize: 13, fontWeight: 600, color: 'var(--primary)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {telegramLoading ? 'Generating link…' : 'Connect Telegram'}
+                      </button>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {telegramLink.botUrl && (
+                          <a
+                            href={telegramLink.botUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                              padding: '9px 0', borderRadius: 8,
+                              background: 'var(--primary)', color: '#fff',
+                              fontSize: 13, fontWeight: 600, textDecoration: 'none',
+                            }}
+                          >
+                            Open in Telegram <ExternalLink size={13} />
+                          </a>
+                        )}
+                        <div style={{
+                          background: 'var(--gray-50)', borderRadius: 8,
+                          padding: '10px 12px', fontSize: 12, color: 'var(--gray-600)',
+                        }}>
+                          Or open Telegram, find <b>@pknotification_bot</b> and send:
+                          <code
+                            onClick={e => {
+                              void navigator.clipboard.writeText((e.currentTarget as HTMLElement).innerText);
+                            }}
+                            title="Tap to copy"
+                            style={{
+                              display: 'block', marginTop: 6,
+                              padding: '6px 8px', borderRadius: 6,
+                              background: 'var(--gray-100)', fontFamily: 'monospace',
+                              fontSize: 12, wordBreak: 'break-all',
+                              cursor: 'copy', userSelect: 'all',
+                            }}
+                          >
+                            /start {telegramLink.token}
+                          </code>
+                        </div>
+                        <p style={{ fontSize: 11, color: 'var(--gray-400)', margin: 0, textAlign: 'center' }}>
+                          Tap the command above to copy. Expires in 10 minutes.
+                        </p>
+                        <button
+                          onClick={handleGenerateTelegramLink}
+                          disabled={telegramLoading}
+                          style={{
+                            background: 'none', border: 'none', fontSize: 12,
+                            color: 'var(--gray-400)', cursor: 'pointer', padding: 0,
+                          }}
+                        >
+                          Generate new link
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Quick links */}
             <div className="card" style={{ marginTop: 16, overflow: 'hidden' }}>

@@ -1,0 +1,17 @@
+{
+  "name": "PK Food",
+  "short_name": "PK Food",
+  "description": "NRS HQ internal canteen ordering",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1B5C3B",
+  "icons": [
+    {
+      "src": "/logo.jpeg",
+      "sizes": "any",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}
