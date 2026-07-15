@@ -66,24 +66,38 @@ enum Floor {
 }
 
 model User {
-  id                String    @id @default(cuid())
-  email             String    @unique
+  id                String             @id @default(cuid())
+  email             String             @unique
   password          String?
-  emailVerified     Boolean   @default(false)
-  verifyToken       String?   @unique
+  emailVerified     Boolean            @default(false)
+  verifyToken       String?            @unique
   verifyTokenExpiry DateTime?
-  resetToken        String?   @unique
+  resetToken        String?            @unique
   resetTokenExpiry  DateTime?
   name              String?
   phone             String?
-  role              Role      @default(STAFF)
+  role              Role               @default(STAFF)
   floor             Floor?
   officeNumber      String?
+  telegramChatId    String?
   orders            Order[]
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  pushSubscriptions PushSubscription[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   @@map("users")
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@map("push_subscriptions")
 }
 
 model Vendor {

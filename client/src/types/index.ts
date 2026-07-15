@@ -23,6 +23,7 @@ export interface User {
   role: Role;
   floor?: Floor | null;
   officeNumber?: string | null;
+  telegramChatId?: string | null;
 }
 
 export interface Vendor {

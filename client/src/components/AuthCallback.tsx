@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, setToken } from '../api/client';
+import { registerPushNotifications } from '../lib/push';
 import type { ApiResponse } from '../types';
 
 export default function AuthCallback() {
@@ -25,6 +26,7 @@ export default function AuthCallback() {
       .get<ApiResponse<{ token: string }>>(`/auth/verify?token=${token}`)
       .then(({ data }) => {
         setToken(data.data.token);
+        void registerPushNotifications();
         navigate('/menu', { replace: true });
       })
       .catch((err: unknown) => {

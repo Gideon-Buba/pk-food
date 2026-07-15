@@ -67,4 +67,14 @@ export class ConfigService {
   get cloudinaryApiSecret(): string {
     return this.optional('CLOUDINARY_API_SECRET', '');
   }
+
+  // Web Push (VAPID) — generate keys with: npx web-push generate-vapid-keys
+  get vapidPublicKey(): string  { return this.require('VAPID_PUBLIC_KEY'); }
+  get vapidPrivateKey(): string { return this.require('VAPID_PRIVATE_KEY'); }
+  get vapidSubject(): string    { return this.optional('VAPID_SUBJECT', 'mailto:admin@pkfood.ng'); }
+
+  // Telegram Bot
+  get telegramBotToken(): string      { return this.require('TELEGRAM_BOT_TOKEN'); }
+  get telegramBotName(): string       { return this.optional('TELEGRAM_BOT_NAME', ''); }
+  get telegramWebhookSecret(): string { return this.optional('TELEGRAM_WEBHOOK_SECRET', ''); }
 }
