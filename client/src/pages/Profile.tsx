@@ -303,7 +303,7 @@ export default function Profile() {
                       </button>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        {telegramLink.botUrl ? (
+                        {telegramLink.botUrl && (
                           <a
                             href={telegramLink.botUrl}
                             target="_blank"
@@ -317,24 +317,30 @@ export default function Profile() {
                           >
                             Open in Telegram <ExternalLink size={13} />
                           </a>
-                        ) : (
-                          <div style={{
-                            background: 'var(--gray-50)', borderRadius: 8,
-                            padding: '10px 12px', fontSize: 12, color: 'var(--gray-600)',
-                          }}>
-                            Send this command to the bot:
-                            <code style={{
+                        )}
+                        <div style={{
+                          background: 'var(--gray-50)', borderRadius: 8,
+                          padding: '10px 12px', fontSize: 12, color: 'var(--gray-600)',
+                        }}>
+                          Or open Telegram, find <b>@pknotification_bot</b> and send:
+                          <code
+                            onClick={e => {
+                              void navigator.clipboard.writeText((e.currentTarget as HTMLElement).innerText);
+                            }}
+                            title="Tap to copy"
+                            style={{
                               display: 'block', marginTop: 6,
                               padding: '6px 8px', borderRadius: 6,
                               background: 'var(--gray-100)', fontFamily: 'monospace',
                               fontSize: 12, wordBreak: 'break-all',
-                            }}>
-                              /start {telegramLink.token}
-                            </code>
-                          </div>
-                        )}
+                              cursor: 'copy', userSelect: 'all',
+                            }}
+                          >
+                            /start {telegramLink.token}
+                          </code>
+                        </div>
                         <p style={{ fontSize: 11, color: 'var(--gray-400)', margin: 0, textAlign: 'center' }}>
-                          {telegramLink.instructions} This link expires in 10 minutes.
+                          Tap the command above to copy. Expires in 10 minutes.
                         </p>
                         <button
                           onClick={handleGenerateTelegramLink}

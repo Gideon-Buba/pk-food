@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Headers,
+  Logger,
   Post,
   UnauthorizedException,
   UseGuards,
@@ -15,6 +16,8 @@ import { TelegramService, TelegramUpdate, GenerateLinkResult } from './telegram.
 
 @Controller('telegram')
 export class TelegramController {
+  private readonly logger = new Logger(TelegramController.name);
+
   constructor(
     private readonly telegram: TelegramService,
     private readonly config: ConfigService,
@@ -52,7 +55,9 @@ export class TelegramController {
     @Body() body: TelegramUpdate,
   ): Promise<{ data: null; message: string }> {
     const expectedSecret = this.config.telegramWebhookSecret;
+    this.logger.log(`Webhook received — secret header: "${secret ?? '(none)'}", expected: "${expectedSecret}"`);
     if (expectedSecret && secret !== expectedSecret) {
+      this.logger.warn('Webhook rejected: secret mismatch');
       throw new UnauthorizedException('Invalid webhook secret');
     }
     await this.telegram.handleUpdate(body);
