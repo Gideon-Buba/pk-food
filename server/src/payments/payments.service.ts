@@ -11,6 +11,7 @@ import axios from 'axios';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
 import { OrdersService } from '../orders/orders.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { InitializePaymentDto } from './dto/initialize-payment.dto';
 
 export interface PaystackInitData {
@@ -57,6 +58,7 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly ordersService: OrdersService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private get authHeader(): string {
@@ -161,10 +163,16 @@ export class PaymentsService {
   async handleWebhookEvent(event: WebhookEvent): Promise<void> {
     if (event.event === 'charge.success') {
       const { reference } = event.data;
-      await this.prisma.order.updateMany({
-        where: { paystackRef: reference, paid: false },
+      const order = await this.prisma.order.findFirst({
+        where: { paystackRef: reference },
+        select: { id: true, paid: true },
+      });
+      if (!order || order.paid) return;
+      await this.prisma.order.update({
+        where: { id: order.id },
         data: { paid: true, status: 'CONFIRMED' },
       });
+      void this.notifications.notifyNewOrder(order.id).catch(() => undefined);
     }
   }
 }

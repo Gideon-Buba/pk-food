@@ -112,10 +112,10 @@ export class TelegramService {
     orderId: string,
     requesterName: string | null,
     requesterEmail: string,
+    requesterPhone: string | null,
     floor: string,
     officeNumber: string,
     itemLines: string,
-    deliveryFee: string,
     total: string,
     appUrl: string,
   ): Promise<void> {
@@ -137,10 +137,10 @@ export class TelegramService {
       orderId,
       requesterName,
       requesterEmail,
+      requesterPhone,
       floor,
       officeNumber,
       itemLines,
-      deliveryFee,
       total,
       appUrl,
     );
@@ -169,25 +169,26 @@ export class TelegramService {
     orderId: string,
     requesterName: string | null,
     requesterEmail: string,
+    requesterPhone: string | null,
     floor: string,
     officeNumber: string,
     itemLines: string,
-    deliveryFee: string,
     total: string,
     appUrl: string,
   ): string {
     const shortId = orderId.slice(-8).toUpperCase();
     const displayName = requesterName ?? requesterEmail;
+    const contactLine = requesterPhone
+      ? `${displayName} — ${requesterPhone}`
+      : displayName;
     return [
       `<b>New Order #${shortId}</b>`,
-      `From: <b>${displayName}</b> (${requesterEmail})`,
-      `Deliver to: Floor ${floor}, Wing ${officeNumber}`,
+      `${contactLine}`,
+      `Floor ${floor}, Room ${officeNumber}`,
       '',
       itemLines,
       '',
-      `Delivery fee: ${deliveryFee}`,
       `<b>Total: ${total}</b>`,
-      '',
       `<a href="${appUrl}/admin">View in admin panel</a>`,
     ].join('\n');
   }

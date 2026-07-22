@@ -30,7 +30,7 @@ export class NotificationsService {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: {
-        user: { select: { name: true, email: true } },
+        user: { select: { name: true, email: true, phone: true } },
         items: { include: { menuItem: true } },
       },
     });
@@ -73,10 +73,10 @@ export class NotificationsService {
         orderId,
         order.user.name,
         order.user.email,
+        order.user.phone ?? null,
         String(order.floor),
         order.officeNumber,
         itemLines,
-        formatNaira(deliveryFee),
         total,
         this.config.appUrl,
       ),

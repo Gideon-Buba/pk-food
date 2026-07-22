@@ -91,11 +91,6 @@ export class OrdersService {
       });
     }, { timeout: 15000 });
 
-    // Fire-and-forget: notification errors must never fail order creation.
-    void this.notifications.notifyNewOrder(order.id).catch((err: unknown) => {
-      this.logger.error('New-order notification failed:', err);
-    });
-
     return order;
   }
 
