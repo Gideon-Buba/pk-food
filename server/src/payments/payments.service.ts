@@ -131,10 +131,13 @@ export class PaymentsService {
     const paid = txStatus === 'success';
 
     if (paid) {
-      await this.prisma.order.updateMany({
+      const result = await this.prisma.order.updateMany({
         where: { paystackRef: reference, paid: false },
         data: { paid: true, status: 'CONFIRMED' },
       });
+      if (result.count > 0) {
+        void this.notifications.notifyNewOrder(order.id).catch(() => undefined);
+      }
     } else if (txStatus === 'abandoned' || txStatus === 'failed') {
       const order = await this.prisma.order.findFirst({
         where: { paystackRef: reference, paid: false },
