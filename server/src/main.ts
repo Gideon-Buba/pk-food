@@ -5,6 +5,7 @@ import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
 import * as dotenv from 'dotenv';
+import type { IncomingMessage, ServerResponse } from 'http';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
@@ -12,18 +13,38 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
 dotenv.config();
 
+type RawRequest = IncomingMessage & { rawBody?: Buffer };
+
 async function bootstrap(): Promise<void> {
   const server = express();
 
-  // body-parser rejects charset=UTF-8 (uppercase) which some browsers send.
-  // Normalize before NestJS registers its body-parser.
-  server.use((req, _res, next) => {
-    const ct = req.headers['content-type'];
-    if (ct) req.headers['content-type'] = ct.replace(/charset=UTF-8/g, 'charset=utf-8');
-    next();
-  });
+  // Register our own JSON body-parser first so it wins over NestJS's.
+  // The `type` function runs before charset validation — we normalize
+  // charset=UTF-8 to charset=utf-8 there (Telegram sends uppercase;
+  // body-parser rejects it). The `verify` function captures rawBody
+  // so the Paystack webhook can verify its HMAC signature.
+  server.use(
+    express.json({
+      limit: '10mb',
+      type: (req: IncomingMessage) => {
+        const ct = req.headers['content-type'] ?? '';
+        if (ct && /charset=/i.test(ct)) {
+          req.headers['content-type'] = ct.replace(
+            /charset=([^;,\s]+)/gi,
+            (_m, cs: string) => `charset=${cs.toLowerCase()}`,
+          );
+        }
+        return /^application\/json/i.test(req.headers['content-type'] ?? '');
+      },
+      verify: (req: RawRequest, _res: ServerResponse, buf: Buffer) => {
+        req.rawBody = buf;
+      },
+    }),
+  );
 
-  const app = await NestFactory.create(AppModule, new ExpressAdapter(server), { rawBody: true });
+  // rawBody is now handled above — do not pass rawBody:true or NestJS would
+  // register a second body-parser that fails on the already-parsed body.
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
 
   app.enableCors({ origin: process.env['APP_URL'] ?? 'http://localhost:5173' });
 
