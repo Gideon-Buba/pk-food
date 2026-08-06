@@ -5,34 +5,30 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { createHmac } from 'crypto';
 import { PaymentsService } from './payments.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
 import { OrdersService } from '../orders/orders.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 jest.mock('axios');
 import axios from 'axios';
 const axiosMock = axios as jest.Mocked<typeof axios>;
 
-const TEST_SECRET = 'paystack-secret-key';
-
-function makeSignature(body: string): string {
-  return createHmac('sha512', TEST_SECRET).update(body).digest('hex');
-}
+const TEST_SECRET_HASH = 'my-flw-secret-hash';
 
 function mockOrder(overrides: Record<string, unknown> = {}) {
   return {
     id: 'order-1',
     userId: 'user-1',
     paid: false,
-    paystackRef: 'ref-1',
+    paymentRef: 'order-1',
     status: 'PENDING',
     deliveryFee: { toNumber: () => 300 },
     items: [
       { unitPrice: { toNumber: () => 1500 }, quantity: 2 },
     ],
-    user: { email: 'alice@nrs.gov.ng' },
+    user: { email: 'alice@nrs.gov.ng', name: 'Alice' },
     ...overrides,
   };
 }
@@ -41,9 +37,11 @@ describe('PaymentsService', () => {
   let service: PaymentsService;
   let prismaOrder: Record<string, jest.Mock>;
   let mockOrdersService: { restoreStock: jest.Mock };
+  let mockNotifications: { notifyNewOrder: jest.Mock };
 
   const mockConfig = {
-    paystackSecretKey: TEST_SECRET,
+    flutterwaveSecretKey: 'flw-secret-key',
+    flutterwaveSecretHash: TEST_SECRET_HASH,
     appUrl: 'http://localhost:5173',
   };
 
@@ -56,6 +54,7 @@ describe('PaymentsService', () => {
     };
 
     mockOrdersService = { restoreStock: jest.fn().mockResolvedValue(undefined) };
+    mockNotifications = { notifyNewOrder: jest.fn().mockResolvedValue(undefined) };
 
     const mockPrisma = {
       order: prismaOrder,
@@ -68,6 +67,7 @@ describe('PaymentsService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: ConfigService, useValue: mockConfig },
         { provide: OrdersService, useValue: mockOrdersService },
+        { provide: NotificationsService, useValue: mockNotifications },
       ],
     }).compile();
 
@@ -79,42 +79,36 @@ describe('PaymentsService', () => {
   // ── verifyWebhookSignature ────────────────────────────────────────────────
 
   describe('verifyWebhookSignature', () => {
-    it('passes for a valid HMAC-SHA512 signature', () => {
-      const body = JSON.stringify({ event: 'charge.success', data: { reference: 'ref' } });
-      const sig = makeSignature(body);
-      expect(() => service.verifyWebhookSignature(Buffer.from(body), sig)).not.toThrow();
+    it('passes when the hash matches the configured secret', () => {
+      expect(() => service.verifyWebhookSignature(TEST_SECRET_HASH)).not.toThrow();
     });
 
-    it('throws UnauthorizedException for an invalid signature', () => {
-      const body = JSON.stringify({ event: 'charge.success', data: { reference: 'ref' } });
-      expect(() =>
-        service.verifyWebhookSignature(Buffer.from(body), 'bad-sig'),
-      ).toThrow(UnauthorizedException);
-    });
-
-    it('throws UnauthorizedException when the body has been tampered with', () => {
-      const original = JSON.stringify({ event: 'charge.success', data: { reference: 'ref' } });
-      const sig = makeSignature(original);
-      const tampered = JSON.stringify({ event: 'charge.success', data: { reference: 'OTHER' } });
-      expect(() =>
-        service.verifyWebhookSignature(Buffer.from(tampered), sig),
-      ).toThrow(UnauthorizedException);
+    it('throws UnauthorizedException for a wrong hash', () => {
+      expect(() => service.verifyWebhookSignature('wrong-hash')).toThrow(UnauthorizedException);
     });
   });
 
   // ── handleWebhookEvent ────────────────────────────────────────────────────
 
   describe('handleWebhookEvent', () => {
-    it('marks order as paid and CONFIRMED on charge.success', async () => {
-      prismaOrder.updateMany.mockResolvedValue({ count: 1 });
+    it('marks order as paid and CONFIRMED on charge.completed', async () => {
+      prismaOrder.findFirst.mockResolvedValue({ id: 'order-1', paid: false });
+      prismaOrder.update.mockResolvedValue(undefined);
 
-      await service.handleWebhookEvent({
-        event: 'charge.success',
-        data: { reference: 'ref-1', status: 'success', amount: 360000 },
+      axiosMock.get = jest.fn().mockResolvedValue({
+        data: {
+          status: 'success',
+          data: { status: 'successful', tx_ref: 'order-1', id: 12345, amount: 3300, currency: 'NGN' },
+        },
       });
 
-      expect(prismaOrder.updateMany).toHaveBeenCalledWith({
-        where: { paystackRef: 'ref-1', paid: false },
+      await service.handleWebhookEvent({
+        event: 'charge.completed',
+        data: { id: 12345, tx_ref: 'order-1', status: 'successful', amount: 3300, currency: 'NGN' },
+      });
+
+      expect(prismaOrder.update).toHaveBeenCalledWith({
+        where: { id: 'order-1' },
         data: { paid: true, status: 'CONFIRMED' },
       });
     });
@@ -122,12 +116,25 @@ describe('PaymentsService', () => {
     it('ignores unknown webhook events without throwing', async () => {
       await expect(
         service.handleWebhookEvent({
-          event: 'transfer.success',
-          data: { reference: 'ref-1', status: 'success', amount: 0 },
+          event: 'transfer.completed',
+          data: { id: 99, tx_ref: 'order-1', status: 'successful', amount: 0, currency: 'NGN' },
         }),
       ).resolves.toBeUndefined();
 
-      expect(prismaOrder.updateMany).not.toHaveBeenCalled();
+      expect(prismaOrder.update).not.toHaveBeenCalled();
+    });
+
+    it('ignores events where Flutterwave verify returns non-successful', async () => {
+      axiosMock.get = jest.fn().mockResolvedValue({
+        data: { status: 'success', data: { status: 'failed', tx_ref: 'order-1', id: 12345 } },
+      });
+
+      await service.handleWebhookEvent({
+        event: 'charge.completed',
+        data: { id: 12345, tx_ref: 'order-1', status: 'successful', amount: 3300, currency: 'NGN' },
+      });
+
+      expect(prismaOrder.update).not.toHaveBeenCalled();
     });
   });
 
@@ -155,28 +162,24 @@ describe('PaymentsService', () => {
       );
     });
 
-    it('calls Paystack initialize and stores the reference', async () => {
+    it('calls Flutterwave and returns a checkout link', async () => {
       prismaOrder.findUnique.mockResolvedValue(mockOrder());
       prismaOrder.update.mockResolvedValue(undefined);
 
       axiosMock.post = jest.fn().mockResolvedValue({
         data: {
-          status: true,
-          message: 'Authorization URL created',
-          data: {
-            authorization_url: 'https://checkout.paystack.com/abc',
-            access_code: 'abc',
-            reference: 'order-1',
-          },
+          status: 'success',
+          message: 'Hosted Link',
+          data: { link: 'https://checkout.flutterwave.com/v3/hosted/pay/abc' },
         },
       });
 
       const result = await service.initializePayment('user-1', { orderId: 'order-1' });
 
-      expect(result.authorization_url).toBe('https://checkout.paystack.com/abc');
+      expect(result.link).toBe('https://checkout.flutterwave.com/v3/hosted/pay/abc');
       expect(prismaOrder.update).toHaveBeenCalledWith({
         where: { id: 'order-1' },
-        data: { paystackRef: 'order-1' },
+        data: { paymentRef: 'order-1' },
       });
     });
   });
@@ -184,32 +187,31 @@ describe('PaymentsService', () => {
   // ── verifyPayment ─────────────────────────────────────────────────────────
 
   describe('verifyPayment', () => {
-    it('throws NotFoundException when no order matches the reference', async () => {
-      prismaOrder.findFirst.mockResolvedValue(null);
-      await expect(service.verifyPayment('bad-ref', 'user-1')).rejects.toThrow(NotFoundException);
+    it('throws NotFoundException when Flutterwave returns no data', async () => {
+      axiosMock.get = jest.fn().mockResolvedValue({ data: { data: null } });
+      await expect(service.verifyPayment('12345', 'user-1')).rejects.toThrow(NotFoundException);
     });
 
-    it('throws ForbiddenException when reference belongs to a different user', async () => {
+    it('throws ForbiddenException when order belongs to a different user', async () => {
+      axiosMock.get = jest.fn().mockResolvedValue({
+        data: { data: { status: 'successful', tx_ref: 'order-1', id: 12345, amount: 3300, currency: 'NGN' } },
+      });
       prismaOrder.findFirst.mockResolvedValue(mockOrder({ userId: 'user-2' }));
-      await expect(service.verifyPayment('ref-1', 'user-1')).rejects.toThrow(ForbiddenException);
+      await expect(service.verifyPayment('12345', 'user-1')).rejects.toThrow(ForbiddenException);
     });
 
-    it('marks order paid when Paystack reports success', async () => {
+    it('marks order paid when Flutterwave reports successful', async () => {
+      axiosMock.get = jest.fn().mockResolvedValue({
+        data: { data: { status: 'successful', tx_ref: 'order-1', id: 12345, amount: 3300, currency: 'NGN' } },
+      });
       prismaOrder.findFirst.mockResolvedValue(mockOrder());
       prismaOrder.updateMany.mockResolvedValue({ count: 1 });
 
-      axiosMock.get = jest.fn().mockResolvedValue({
-        data: {
-          status: true,
-          data: { status: 'success', reference: 'ref-1', amount: 360000, paid_at: new Date().toISOString(), metadata: {} },
-        },
-      });
+      const result = await service.verifyPayment('12345', 'user-1');
 
-      const result = await service.verifyPayment('ref-1', 'user-1');
-
-      expect(result).toEqual({ paid: true, status: 'success' });
+      expect(result).toEqual({ paid: true, status: 'successful' });
       expect(prismaOrder.updateMany).toHaveBeenCalledWith({
-        where: { paystackRef: 'ref-1', paid: false },
+        where: { paymentRef: 'order-1', paid: false },
         data: { paid: true, status: 'CONFIRMED' },
       });
     });

@@ -34,7 +34,7 @@ function mockOrder(overrides: Record<string, unknown> = {}) {
     officeNumber: '301',
     phone: '08000000000',
     deliveryFee: { toNumber: () => 300 },
-    paystackRef: null,
+    paymentRef: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     items: [],

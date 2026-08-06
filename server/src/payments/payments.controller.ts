@@ -1,6 +1,6 @@
 import { Controller, Post, Get, Body, Param, UseGuards } from '@nestjs/common';
 import { User } from '@prisma/client';
-import { PaymentsService, PaystackInitData } from './payments.service';
+import { PaymentsService, FlutterwaveInitData } from './payments.service';
 import { InitializePaymentDto } from './dto/initialize-payment.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -14,14 +14,17 @@ export class PaymentsController {
   async initialize(
     @CurrentUser() user: User,
     @Body() dto: InitializePaymentDto,
-  ): Promise<{ data: PaystackInitData; message: string }> {
+  ): Promise<{ data: FlutterwaveInitData; message: string }> {
     const data = await this.paymentsService.initializePayment(user.id, dto);
     return { data, message: 'Payment initialized' };
   }
 
-  @Get('verify/:reference')
-  async verify(@CurrentUser() user: User, @Param('reference') reference: string) {
-    const data = await this.paymentsService.verifyPayment(reference, user.id);
+  @Get('verify/:transactionId')
+  async verify(
+    @CurrentUser() user: User,
+    @Param('transactionId') transactionId: string,
+  ) {
+    const data = await this.paymentsService.verifyPayment(transactionId, user.id);
     return { data, message: data.paid ? 'Payment verified' : 'Payment not confirmed' };
   }
 }

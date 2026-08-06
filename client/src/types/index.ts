@@ -61,7 +61,7 @@ export interface Order {
   floor: string;
   officeNumber: string;
   phone?: string | null;
-  paystackRef?: string;
+  paymentRef?: string;
   paid: boolean;
   createdAt: string;
   updatedAt: string;

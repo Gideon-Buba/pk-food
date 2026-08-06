@@ -6,7 +6,6 @@ import {
   UnauthorizedException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { createHmac } from 'crypto';
 import axios from 'axios';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
@@ -14,45 +13,44 @@ import { OrdersService } from '../orders/orders.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { InitializePaymentDto } from './dto/initialize-payment.dto';
 
-export interface PaystackInitData {
-  authorization_url: string;
-  access_code: string;
-  reference: string;
+export interface FlutterwaveInitData {
+  link: string;
 }
 
-interface PaystackInitResponse {
-  status: boolean;
+interface FlutterwaveInitResponse {
+  status: string;
   message: string;
-  data: PaystackInitData;
+  data: { link: string };
 }
 
-interface PaystackVerifyData {
-  status: 'success' | 'failed' | 'abandoned' | 'pending';
-  reference: string;
+interface FlutterwaveVerifyData {
+  status: 'successful' | 'failed' | 'cancelled' | 'pending';
+  tx_ref: string;
+  id: number;
   amount: number;
-  paid_at: string;
-  metadata: Record<string, string>;
+  currency: string;
 }
 
-interface PaystackVerifyResponse {
-  status: boolean;
+interface FlutterwaveVerifyResponse {
+  status: string;
   message: string;
-  data: PaystackVerifyData;
+  data: FlutterwaveVerifyData;
 }
 
-interface WebhookEvent {
+export interface WebhookEvent {
   event: string;
   data: {
-    reference: string;
+    id: number;
+    tx_ref: string;
     status: string;
     amount: number;
-    metadata?: Record<string, string>;
+    currency: string;
   };
 }
 
 @Injectable()
 export class PaymentsService {
-  private readonly paystackBase = 'https://api.paystack.co';
+  private readonly flwBase = 'https://api.flutterwave.com/v3';
 
   constructor(
     private readonly prisma: PrismaService,
@@ -62,17 +60,17 @@ export class PaymentsService {
   ) {}
 
   private get authHeader(): string {
-    return `Bearer ${this.config.paystackSecretKey}`;
+    return `Bearer ${this.config.flutterwaveSecretKey}`;
   }
 
   async initializePayment(
     userId: string,
     dto: InitializePaymentDto,
-  ): Promise<PaystackInitData> {
+  ): Promise<FlutterwaveInitData> {
     const order = await this.prisma.order.findUnique({
       where: { id: dto.orderId },
       include: {
-        user: { select: { email: true } },
+        user: { select: { email: true, name: true } },
         items: true,
       },
     });
@@ -86,91 +84,110 @@ export class PaymentsService {
       0,
     );
     const totalNaira = itemsTotal + order.deliveryFee.toNumber();
-    const amountKobo = Math.round(totalNaira * 100);
 
-    const callbackUrl = `${this.config.appUrl}/order-confirmation?reference=${order.id}`;
+    // Redirect URL — Flutterwave appends ?status=&tx_ref=&transaction_id= automatically
+    const redirectUrl = `${this.config.appUrl}/order-confirmation`;
 
-    const response = await axios.post<PaystackInitResponse>(
-      `${this.paystackBase}/transaction/initialize`,
+    const response = await axios.post<FlutterwaveInitResponse>(
+      `${this.flwBase}/payments`,
       {
-        email: order.user.email,
-        amount: amountKobo,
-        reference: order.id,
-        callback_url: callbackUrl,
-        metadata: { orderId: order.id },
+        tx_ref: order.id,
+        amount: totalNaira,
+        currency: 'NGN',
+        redirect_url: redirectUrl,
+        customer: {
+          email: order.user.email,
+          name: order.user.name ?? order.user.email,
+        },
+        customizations: {
+          title: 'PK Food',
+          description: 'Food order payment',
+        },
       },
       { headers: { Authorization: this.authHeader } },
     );
 
-    if (!response.data.status) {
-      throw new InternalServerErrorException('Paystack initialization failed');
+    if (response.data.status !== 'success') {
+      throw new InternalServerErrorException('Flutterwave initialization failed');
     }
 
     await this.prisma.order.update({
       where: { id: order.id },
-      data: { paystackRef: response.data.data.reference },
+      data: { paymentRef: order.id },
     });
 
-    return response.data.data;
+    return { link: response.data.data.link };
   }
 
   async verifyPayment(
-    reference: string,
+    transactionId: string,
     userId: string,
   ): Promise<{ paid: boolean; status: string }> {
-    const order = await this.prisma.order.findFirst({ where: { paystackRef: reference } });
-    if (!order) throw new NotFoundException('Order not found');
-    if (order.userId !== userId) throw new ForbiddenException();
-
-    const response = await axios.get<PaystackVerifyResponse>(
-      `${this.paystackBase}/transaction/verify/${reference}`,
+    const response = await axios.get<FlutterwaveVerifyResponse>(
+      `${this.flwBase}/transactions/${transactionId}/verify`,
       { headers: { Authorization: this.authHeader } },
     );
 
-    const { status: txStatus } = response.data.data;
-    const paid = txStatus === 'success';
+    const txData = response.data.data;
+    if (!txData) throw new NotFoundException('Transaction not found');
+
+    // Locate our order by the tx_ref we stored (order.id)
+    const order = await this.prisma.order.findFirst({
+      where: { paymentRef: txData.tx_ref },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.userId !== userId) throw new ForbiddenException();
+
+    const paid = txData.status === 'successful';
 
     if (paid) {
       const result = await this.prisma.order.updateMany({
-        where: { paystackRef: reference, paid: false },
+        where: { paymentRef: txData.tx_ref, paid: false },
         data: { paid: true, status: 'CONFIRMED' },
       });
       if (result.count > 0) {
         void this.notifications.notifyNewOrder(order.id).catch(() => undefined);
       }
-    } else if (txStatus === 'abandoned' || txStatus === 'failed') {
-      const order = await this.prisma.order.findFirst({
-        where: { paystackRef: reference, paid: false },
+    } else if (txData.status === 'failed' || txData.status === 'cancelled') {
+      const unpaid = await this.prisma.order.findFirst({
+        where: { paymentRef: txData.tx_ref, paid: false },
       });
-      if (order) {
+      if (unpaid) {
         await this.prisma.$transaction(async (tx) => {
-          await this.ordersService.restoreStock(order.id, tx);
-          await tx.order.update({ where: { id: order.id }, data: { status: 'CANCELLED' } });
+          await this.ordersService.restoreStock(unpaid.id, tx);
+          await tx.order.update({ where: { id: unpaid.id }, data: { status: 'CANCELLED' } });
         });
       }
     }
 
-    return { paid, status: txStatus };
+    return { paid, status: txData.status };
   }
 
-  verifyWebhookSignature(rawBody: Buffer, signature: string): void {
-    const hash = createHmac('sha512', this.config.paystackSecretKey)
-      .update(rawBody)
-      .digest('hex');
-
-    if (hash !== signature) {
+  verifyWebhookSignature(signature: string): void {
+    if (signature !== this.config.flutterwaveSecretHash) {
       throw new UnauthorizedException('Invalid webhook signature');
     }
   }
 
   async handleWebhookEvent(event: WebhookEvent): Promise<void> {
-    if (event.event === 'charge.success') {
-      const { reference } = event.data;
+    if (event.event === 'charge.completed' && event.data.status === 'successful') {
+      const txRef = event.data.tx_ref;
+
+      // Re-verify with Flutterwave API to avoid spoofed webhook bodies
+      const response = await axios.get<FlutterwaveVerifyResponse>(
+        `${this.flwBase}/transactions/${event.data.id}/verify`,
+        { headers: { Authorization: this.authHeader } },
+      );
+
+      if (response.data.data?.status !== 'successful') return;
+      if (response.data.data.tx_ref !== txRef) return;
+
       const order = await this.prisma.order.findFirst({
-        where: { paystackRef: reference },
+        where: { paymentRef: txRef },
         select: { id: true, paid: true },
       });
       if (!order || order.paid) return;
+
       await this.prisma.order.update({
         where: { id: order.id },
         data: { paid: true, status: 'CONFIRMED' },

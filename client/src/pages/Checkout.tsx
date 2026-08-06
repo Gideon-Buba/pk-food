@@ -10,7 +10,7 @@ import type { ApiResponse, Order } from '../types';
 
 const DELIVERY_FEE = Number(import.meta.env.VITE_DELIVERY_FEE ?? 300);
 
-interface PaystackInitData { authorization_url: string; reference: string; }
+interface FlutterwaveInitData { link: string; }
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -34,9 +34,9 @@ export default function Checkout() {
         floor, officeNumber, phone,
       });
       const orderId = orderRes.data.data.id;
-      const payRes = await api.post<ApiResponse<PaystackInitData>>('/payments/initialize', { orderId });
+      const payRes = await api.post<ApiResponse<FlutterwaveInitData>>('/payments/initialize', { orderId });
       clearCart();
-      window.location.href = payRes.data.data.authorization_url;
+      window.location.href = payRes.data.data.link;
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       toast.error(e.response?.data?.message ?? 'Something went wrong. Please try again.');
@@ -92,7 +92,7 @@ export default function Checkout() {
               </div>
               <button type="submit" disabled={loading} className="btn btn-primary btn-lg btn-full" style={{ marginTop: 4 }}>
                 {loading ? <span className="spinner" /> : <CreditCard size={17} />}
-                {loading ? 'Processing…' : `Pay ₦${total.toLocaleString()} with Paystack`}
+                {loading ? 'Processing…' : `Pay ₦${total.toLocaleString()} with Flutterwave`}
               </button>
             </form>
           </div>

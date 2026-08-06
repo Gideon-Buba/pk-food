@@ -44,12 +44,12 @@ export class ConfigService {
     return this.optional('EMAIL_FROM', 'PK Food <noreply@pkfood.ng>');
   }
 
-  get paystackSecretKey(): string {
-    return this.require('PAYSTACK_SECRET_KEY');
+  get flutterwaveSecretKey(): string {
+    return this.require('FLW_SECRET_KEY');
   }
 
-  get paystackPublicKey(): string {
-    return this.require('PAYSTACK_PUBLIC_KEY');
+  get flutterwaveSecretHash(): string {
+    return this.require('FLW_SECRET_HASH');
   }
 
   get deliveryFee(): number {
