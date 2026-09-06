@@ -12,9 +12,17 @@ import { ConfigService } from '../config/config.service';
 import { OrdersService } from '../orders/orders.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { InitializePaymentDto } from './dto/initialize-payment.dto';
+import { SubmitBankTransferDto } from './dto/submit-bank-transfer.dto';
 
 export interface FlutterwaveInitData {
   link: string;
+}
+
+export interface BankDetails {
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  contactPhone: string;
 }
 
 interface FlutterwaveInitResponse {
@@ -161,6 +169,82 @@ export class PaymentsService {
     }
 
     return { paid, status: txData.status };
+  }
+
+  // ── Manual bank transfer ──────────────────────────────────────────────────
+
+  getBankDetails(): BankDetails {
+    return {
+      bankName: this.config.bankName,
+      accountName: this.config.bankAccountName,
+      accountNumber: this.config.bankAccountNumber,
+      contactPhone: this.config.paymentContactPhone,
+    };
+  }
+
+  async submitBankTransfer(
+    userId: string,
+    dto: SubmitBankTransferDto,
+  ): Promise<{ reference: string }> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: dto.orderId },
+    });
+
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.userId !== userId) throw new ForbiddenException();
+    if (order.paid) throw new BadRequestException('Order already paid');
+
+    await this.prisma.order.update({
+      where: { id: order.id },
+      data: {
+        paymentMethod: 'BANK_TRANSFER',
+        transferReference: dto.transferReference ?? null,
+        paymentRef: order.id,
+      },
+    });
+
+    void this.notifications
+      .notifyPendingTransfer(order.id)
+      .catch(() => undefined);
+
+    return { reference: order.reference };
+  }
+
+  async confirmManualPayment(
+    orderId: string,
+  ): Promise<{ paid: boolean; status: string }> {
+    const result = await this.prisma.order.updateMany({
+      where: { id: orderId, paid: false },
+      data: { paid: true, status: 'CONFIRMED' },
+    });
+
+    if (result.count === 0) {
+      throw new NotFoundException('No unpaid order found with that id');
+    }
+
+    void this.notifications.notifyNewOrder(orderId).catch(() => undefined);
+
+    return { paid: true, status: 'CONFIRMED' };
+  }
+
+  async rejectManualPayment(
+    orderId: string,
+  ): Promise<{ status: string }> {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.paid) {
+      throw new BadRequestException('Cannot reject a paid order');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await this.ordersService.restoreStock(orderId, tx);
+      await tx.order.update({
+        where: { id: orderId },
+        data: { status: 'CANCELLED' },
+      });
+    });
+
+    return { status: 'CANCELLED' };
   }
 
   verifyWebhookSignature(signature: string): void {

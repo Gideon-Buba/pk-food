@@ -52,8 +52,11 @@ export interface OrderItem {
   unitPrice: number;
 }
 
+export type PaymentMethod = 'FLUTTERWAVE' | 'BANK_TRANSFER';
+
 export interface Order {
   id: string;
+  reference: string;
   user: { name?: string | null; email: string; floor: string | null; officeNumber: string | null };
   items: OrderItem[];
   deliveryFee: number;
@@ -61,7 +64,9 @@ export interface Order {
   floor: string;
   officeNumber: string;
   phone?: string | null;
+  paymentMethod: PaymentMethod;
   paymentRef?: string;
+  transferReference?: string | null;
   paid: boolean;
   createdAt: string;
   updatedAt: string;

@@ -56,6 +56,12 @@ export class ConfigService {
     return parseInt(this.optional('DELIVERY_FEE', '300'), 10);
   }
 
+  // Manual bank-transfer payment option — details shown to the buyer at checkout
+  get bankName(): string          { return this.optional('BANK_NAME', ''); }
+  get bankAccountName(): string   { return this.optional('BANK_ACCOUNT_NAME', ''); }
+  get bankAccountNumber(): string { return this.optional('BANK_ACCOUNT_NUMBER', ''); }
+  get paymentContactPhone(): string { return this.optional('PAYMENT_CONTACT_PHONE', ''); }
+
   get cloudinaryCloudName(): string {
     return this.optional('CLOUDINARY_CLOUD_NAME', '');
   }

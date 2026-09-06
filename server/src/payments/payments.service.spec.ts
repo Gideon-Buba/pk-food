@@ -20,9 +20,11 @@ const TEST_SECRET_HASH = 'my-flw-secret-hash';
 function mockOrder(overrides: Record<string, unknown> = {}) {
   return {
     id: 'order-1',
+    reference: 'PK7BN2',
     userId: 'user-1',
     paid: false,
     paymentRef: 'order-1',
+    paymentMethod: 'FLUTTERWAVE',
     status: 'PENDING',
     deliveryFee: { toNumber: () => 300 },
     items: [
@@ -37,12 +39,16 @@ describe('PaymentsService', () => {
   let service: PaymentsService;
   let prismaOrder: Record<string, jest.Mock>;
   let mockOrdersService: { restoreStock: jest.Mock };
-  let mockNotifications: { notifyNewOrder: jest.Mock };
+  let mockNotifications: { notifyNewOrder: jest.Mock; notifyPendingTransfer: jest.Mock };
 
   const mockConfig = {
     flutterwaveSecretKey: 'flw-secret-key',
     flutterwaveSecretHash: TEST_SECRET_HASH,
     appUrl: 'http://localhost:5173',
+    bankName: 'Zenith Bank',
+    bankAccountName: 'NRS Canteen',
+    bankAccountNumber: '1234567890',
+    paymentContactPhone: '08012345678',
   };
 
   beforeEach(async () => {
@@ -54,7 +60,10 @@ describe('PaymentsService', () => {
     };
 
     mockOrdersService = { restoreStock: jest.fn().mockResolvedValue(undefined) };
-    mockNotifications = { notifyNewOrder: jest.fn().mockResolvedValue(undefined) };
+    mockNotifications = {
+      notifyNewOrder: jest.fn().mockResolvedValue(undefined),
+      notifyPendingTransfer: jest.fn().mockResolvedValue(undefined),
+    };
 
     const mockPrisma = {
       order: prismaOrder,
@@ -214,6 +223,94 @@ describe('PaymentsService', () => {
         where: { paymentRef: 'order-1', paid: false },
         data: { paid: true, status: 'CONFIRMED' },
       });
+    });
+  });
+
+  // ── manual bank transfer ──────────────────────────────────────────────────
+
+  describe('getBankDetails', () => {
+    it('returns the configured account details', () => {
+      expect(service.getBankDetails()).toEqual({
+        bankName: 'Zenith Bank',
+        accountName: 'NRS Canteen',
+        accountNumber: '1234567890',
+        contactPhone: '08012345678',
+      });
+    });
+  });
+
+  describe('submitBankTransfer', () => {
+    it('sets BANK_TRANSFER + note and returns the order reference', async () => {
+      prismaOrder.findUnique.mockResolvedValue(mockOrder());
+      prismaOrder.update.mockResolvedValue(undefined);
+
+      const result = await service.submitBankTransfer('user-1', {
+        orderId: 'order-1',
+        transferReference: 'my narration',
+      });
+
+      expect(result).toEqual({ reference: 'PK7BN2' });
+      expect(prismaOrder.update).toHaveBeenCalledWith({
+        where: { id: 'order-1' },
+        data: { paymentMethod: 'BANK_TRANSFER', transferReference: 'my narration', paymentRef: 'order-1' },
+      });
+      expect(mockNotifications.notifyPendingTransfer).toHaveBeenCalledWith('order-1');
+    });
+
+    it('rejects a paid order', async () => {
+      prismaOrder.findUnique.mockResolvedValue(mockOrder({ paid: true }));
+      await expect(
+        service.submitBankTransfer('user-1', { orderId: 'order-1' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects an order owned by another user', async () => {
+      prismaOrder.findUnique.mockResolvedValue(mockOrder({ userId: 'user-2' }));
+      await expect(
+        service.submitBankTransfer('user-1', { orderId: 'order-1' }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('confirmManualPayment', () => {
+    it('flips paid + status and fires the confirmation notification', async () => {
+      prismaOrder.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.confirmManualPayment('order-1');
+
+      expect(result).toEqual({ paid: true, status: 'CONFIRMED' });
+      expect(prismaOrder.updateMany).toHaveBeenCalledWith({
+        where: { id: 'order-1', paid: false },
+        data: { paid: true, status: 'CONFIRMED' },
+      });
+      expect(mockNotifications.notifyNewOrder).toHaveBeenCalledWith('order-1');
+    });
+
+    it('throws when there is no matching unpaid order', async () => {
+      prismaOrder.updateMany.mockResolvedValue({ count: 0 });
+      await expect(service.confirmManualPayment('order-1')).rejects.toThrow(NotFoundException);
+      expect(mockNotifications.notifyNewOrder).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('rejectManualPayment', () => {
+    it('restores stock and cancels the order', async () => {
+      prismaOrder.findUnique.mockResolvedValue(mockOrder());
+      prismaOrder.update.mockResolvedValue(undefined);
+
+      const result = await service.rejectManualPayment('order-1');
+
+      expect(result).toEqual({ status: 'CANCELLED' });
+      expect(mockOrdersService.restoreStock).toHaveBeenCalledWith('order-1', expect.anything());
+      expect(prismaOrder.update).toHaveBeenCalledWith({
+        where: { id: 'order-1' },
+        data: { status: 'CANCELLED' },
+      });
+    });
+
+    it('refuses to reject a paid order', async () => {
+      prismaOrder.findUnique.mockResolvedValue(mockOrder({ paid: true }));
+      await expect(service.rejectManualPayment('order-1')).rejects.toThrow(BadRequestException);
     });
   });
 });

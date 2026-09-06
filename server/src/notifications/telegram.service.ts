@@ -148,6 +148,35 @@ export class TelegramService {
     await Promise.allSettled(chatIds.map((id) => this.sendMessage(id, message)));
   }
 
+  async notifyPendingTransfer(
+    reference: string,
+    requesterName: string,
+    appUrl: string,
+  ): Promise<void> {
+    const recipients = await this.prisma.user.findMany({
+      where: {
+        role: { in: [Role.ADMIN, Role.RUNNER] },
+        telegramChatId: { not: null },
+      },
+      select: { telegramChatId: true },
+    });
+
+    const chatIds = recipients
+      .map((u) => u.telegramChatId)
+      .filter((id): id is string => id !== null);
+
+    if (chatIds.length === 0) return;
+
+    const message = [
+      `<b>Bank transfer to verify — ${reference}</b>`,
+      `${requesterName} says they've paid by transfer.`,
+      `Match reference <b>${reference}</b> against the bank statement, then confirm the payment.`,
+      `<a href="${appUrl}/admin?tab=orders">Open orders</a>`,
+    ].join('\n');
+
+    await Promise.allSettled(chatIds.map((id) => this.sendMessage(id, message)));
+  }
+
   async sendMessage(chatId: string, text: string): Promise<void> {
     try {
       await axios.post<TelegramApiResponse>(
