@@ -44,17 +44,23 @@ export class ConfigService {
     return this.optional('EMAIL_FROM', 'PK Food <noreply@pkfood.ng>');
   }
 
-  get paystackSecretKey(): string {
-    return this.require('PAYSTACK_SECRET_KEY');
+  get flutterwaveSecretKey(): string {
+    return this.require('FLW_SECRET_KEY');
   }
 
-  get paystackPublicKey(): string {
-    return this.require('PAYSTACK_PUBLIC_KEY');
+  get flutterwaveSecretHash(): string {
+    return this.require('FLW_SECRET_HASH');
   }
 
   get deliveryFee(): number {
     return parseInt(this.optional('DELIVERY_FEE', '300'), 10);
   }
+
+  // Manual bank-transfer payment option — details shown to the buyer at checkout
+  get bankName(): string          { return this.optional('BANK_NAME', ''); }
+  get bankAccountName(): string   { return this.optional('BANK_ACCOUNT_NAME', ''); }
+  get bankAccountNumber(): string { return this.optional('BANK_ACCOUNT_NUMBER', ''); }
+  get paymentContactPhone(): string { return this.optional('PAYMENT_CONTACT_PHONE', ''); }
 
   get cloudinaryCloudName(): string {
     return this.optional('CLOUDINARY_CLOUD_NAME', '');

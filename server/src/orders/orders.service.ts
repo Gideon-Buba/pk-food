@@ -11,6 +11,7 @@ import { ConfigService } from '../config/config.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { generateOrderReference } from './order-reference.util';
 
 const VALID_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
   [OrderStatus.PENDING]:    [OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
@@ -38,6 +39,24 @@ export class OrdersService {
   ) {}
 
   async createOrder(user: User, dto: CreateOrderDto): Promise<Order> {
+    // Retry on the (very rare) reference collision from the @unique constraint.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.createOrderOnce(user, dto);
+      } catch (err) {
+        if (
+          attempt < 3 &&
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002'
+        ) {
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
+
+  private async createOrderOnce(user: User, dto: CreateOrderDto): Promise<Order> {
     const order = await this.prisma.$transaction(async (tx) => {
       const menuItemIds = dto.items.map((i) => i.menuItemId);
       const menuItems = await tx.menuItem.findMany({
@@ -72,6 +91,7 @@ export class OrdersService {
       return tx.order.create({
         data: {
           userId: user.id,
+          reference: generateOrderReference(),
           floor: dto.floor ?? user.floor ?? '',
           officeNumber: dto.officeNumber ?? user.officeNumber ?? '',
           phone: dto.phone,

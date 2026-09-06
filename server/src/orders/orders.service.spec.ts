@@ -34,7 +34,7 @@ function mockOrder(overrides: Record<string, unknown> = {}) {
     officeNumber: '301',
     phone: '08000000000',
     deliveryFee: { toNumber: () => 300 },
-    paystackRef: null,
+    paymentRef: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     items: [],
@@ -148,6 +148,8 @@ describe('OrdersService', () => {
         data: { onlineStock: 3, status: ItemStatus.AVAILABLE },
       });
       expect(prisma.order.create).toHaveBeenCalled();
+      const createArg = prisma.order.create.mock.calls[0][0] as { data: { reference: string } };
+      expect(createArg.data.reference).toMatch(/^PK[0-9A-HJKMNP-TV-Z]{5}$/);
     });
 
     it('sets status to OUT_OF_STOCK when last unit is taken', async () => {

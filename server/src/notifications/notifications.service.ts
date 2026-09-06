@@ -88,4 +88,45 @@ export class NotificationsService {
       }
     }
   }
+
+  /**
+   * Notify ADMINs/RUNNERs that a bank transfer is awaiting manual verification.
+   * Never throws — all errors are caught and logged.
+   */
+  async notifyPendingTransfer(orderId: string): Promise<void> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { user: { select: { name: true, email: true } } },
+    });
+
+    if (!order) {
+      this.logger.warn(`notifyPendingTransfer: order ${orderId} not found`);
+      return;
+    }
+
+    const pushPayload = {
+      title: `Bank transfer to verify — ${order.reference}`,
+      body: `${order.user.name ?? order.user.email} says they've paid by transfer`,
+      url: `${this.config.appUrl}/admin?tab=orders`,
+    };
+
+    const results = await Promise.allSettled([
+      this.push
+        .sendToRoles([Role.ADMIN, Role.RUNNER], pushPayload)
+        .catch((err: unknown) => {
+          this.logger.error('Push notification batch failed:', err);
+        }),
+      this.telegram.notifyPendingTransfer(
+        order.reference,
+        order.user.name ?? order.user.email,
+        this.config.appUrl,
+      ),
+    ]);
+
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        this.logger.error('Notification channel failed:', result.reason);
+      }
+    }
+  }
 }

@@ -169,6 +169,23 @@ export default function AdminDashboard() {
     } catch { toast.error('Failed to update status'); }
   };
 
+  const confirmPayment = async (orderId: string) => {
+    try {
+      await api.patch(`/payments/${orderId}/confirm-manual`);
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, paid: true, status: 'CONFIRMED' } : o));
+      toast.success('Payment confirmed');
+    } catch { toast.error('Failed to confirm payment'); }
+  };
+
+  const rejectPayment = async (orderId: string) => {
+    if (!window.confirm('Reject this transfer and cancel the order? Stock will be restored.')) return;
+    try {
+      await api.patch(`/payments/${orderId}/reject-manual`);
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'CANCELLED' } : o));
+      toast.success('Transfer rejected, order cancelled');
+    } catch { toast.error('Failed to reject transfer'); }
+  };
+
   const handleCreateVendor = async (e: React.FormEvent) => {
     e.preventDefault();
     setAddingVendor(true);
@@ -393,7 +410,11 @@ export default function AdminDashboard() {
     if (orderSearch) {
       const q = orderSearch.toLowerCase();
       const name = order.user.email.split('@')[0].toLowerCase();
-      if (!name.includes(q) && !order.user.email.toLowerCase().includes(q)) return false;
+      if (
+        !name.includes(q) &&
+        !order.user.email.toLowerCase().includes(q) &&
+        !(order.reference ?? '').toLowerCase().includes(q)
+      ) return false;
     }
     if (orderStatusFilter && order.status !== orderStatusFilter) return false;
     return true;
@@ -581,7 +602,12 @@ export default function AdminDashboard() {
                           const total = Number(order.deliveryFee) + order.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0);
                           return (
                             <tr key={order.id}>
-                              <td style={{ fontWeight: 500 }}>{order.user.name || order.user.email.split('@')[0]}</td>
+                              <td style={{ fontWeight: 500 }}>
+                                {order.user.name || order.user.email.split('@')[0]}
+                                {order.reference && (
+                                  <div style={{ fontSize: 11, color: 'var(--gray-400)', fontFamily: 'monospace', fontWeight: 400 }}>{order.reference}</div>
+                                )}
+                              </td>
                               <td style={{ color: 'var(--gray-500)', fontSize: 13 }}>{order.floor}, {order.officeNumber}</td>
                               <td style={{ fontSize: 13, color: 'var(--gray-600)', maxWidth: 200 }}>
                                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
@@ -593,9 +619,27 @@ export default function AdminDashboard() {
                                 <span className={`badge ${statusBadgeClass(order.status)}`}>{order.status}</span>
                               </td>
                               <td>
-                                <span className={`badge ${order.paid ? 'badge-green' : 'badge-gray'}`}>
-                                  {order.paid ? 'Paid' : 'Unpaid'}
-                                </span>
+                                {order.paid ? (
+                                  <span className="badge badge-green">Paid</span>
+                                ) : order.paymentMethod === 'BANK_TRANSFER' ? (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+                                    <span className="badge badge-yellow">Transfer — verify</span>
+                                    {order.transferReference && (
+                                      <span style={{ fontSize: 11, color: 'var(--gray-500)' }}>ref: {order.transferReference}</span>
+                                    )}
+                                    {order.phone && (
+                                      <span style={{ fontSize: 11, color: 'var(--gray-500)' }}>{order.phone}</span>
+                                    )}
+                                    {order.status !== 'CANCELLED' && (
+                                      <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+                                        <button className="btn btn-primary" style={{ padding: '3px 8px', fontSize: 11 }} onClick={() => confirmPayment(order.id)}>Confirm payment</button>
+                                        <button className="btn btn-secondary" style={{ padding: '3px 8px', fontSize: 11 }} onClick={() => rejectPayment(order.id)}>Reject</button>
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="badge badge-gray">Unpaid</span>
+                                )}
                               </td>
                               <td>
                                 {NEXT_STATUSES[order.status] ? (

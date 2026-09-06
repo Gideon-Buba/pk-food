@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { CheckCircle, XCircle, ClipboardList, UtensilsCrossed } from 'lucide-react';
+import { CheckCircle, Clock, XCircle, ClipboardList, UtensilsCrossed } from 'lucide-react';
 import { api } from '../api/client';
 import type { ApiResponse } from '../types';
 
-type State = 'loading' | 'success' | 'failed';
+type State = 'loading' | 'success' | 'failed' | 'transfer-pending';
 
 interface VerifyResult { paid: boolean; status: string; }
 
@@ -13,18 +13,39 @@ export default function OrderConfirmation() {
   const [state, setState] = useState<State>('loading');
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
-  const reference = searchParams.get('reference');
+
+  const isBankTransfer = searchParams.get('method') === 'bank';
+  const bankRef = searchParams.get('ref');
+
+  // Flutterwave appends ?status=successful&tx_ref=...&transaction_id=<numeric>
+  const transactionId = searchParams.get('transaction_id');
+  const flwStatus = searchParams.get('status');
+  const txRef = searchParams.get('tx_ref');
 
   useEffect(() => {
-    if (!reference) { setState('failed'); setMessage('No payment reference found.'); return; }
+    if (isBankTransfer) {
+      setState('transfer-pending');
+      return;
+    }
+
+    if (!transactionId) {
+      setState('failed');
+      setMessage('No transaction ID found.');
+      return;
+    }
+
+    if (flwStatus === 'cancelled') {
+      setState('failed');
+      setMessage('Payment was cancelled.');
+      return;
+    }
 
     const verify = async (attempt: number): Promise<void> => {
       try {
-        const { data } = await api.get<ApiResponse<VerifyResult>>(`/payments/verify/${reference}`);
+        const { data } = await api.get<ApiResponse<VerifyResult>>(`/payments/verify/${transactionId}`);
         if (data.data.paid) {
           setState('success');
         } else if (attempt < 4 && data.data.status === 'pending') {
-          // Paystack redirects before their API reflects success — retry with backoff
           await new Promise(r => setTimeout(r, attempt * 1500));
           return verify(attempt + 1);
         } else {
@@ -56,7 +77,31 @@ export default function OrderConfirmation() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--gray-50)', padding: 24 }}>
       <div className="card fade-up" style={{ padding: 40, maxWidth: 420, width: '100%', textAlign: 'center' }}>
-        {state === 'success' ? (
+        {state === 'transfer-pending' ? (
+          <>
+            <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'var(--warning-light, #fef3c7)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+              <Clock size={36} color="var(--warning, #d97706)" />
+            </div>
+            <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 8, letterSpacing: '-0.03em' }}>Transfer submitted</h2>
+            <p style={{ color: 'var(--gray-500)', fontSize: 14, lineHeight: 1.6, marginBottom: 6 }}>
+              We’ll confirm your order once an admin verifies your bank transfer. Call the number you
+              were shown at checkout if it’s urgent.
+            </p>
+            {bankRef && (
+              <p style={{ color: 'var(--gray-400)', fontSize: 13, fontFamily: 'monospace', marginBottom: 28 }}>Reference: {bankRef}</p>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <button className="btn btn-primary btn-full" onClick={() => navigate('/orders')}>
+                <ClipboardList size={15} />
+                Track my order
+              </button>
+              <button className="btn btn-secondary btn-full" onClick={() => navigate('/menu')}>
+                <UtensilsCrossed size={15} />
+                Back to menu
+              </button>
+            </div>
+          </>
+        ) : state === 'success' ? (
           <>
             <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
               <CheckCircle size={36} color="var(--primary)" />
@@ -65,7 +110,7 @@ export default function OrderConfirmation() {
             <p style={{ color: 'var(--gray-500)', fontSize: 14, lineHeight: 1.6, marginBottom: 6 }}>
               Your order is being prepared. A runner will deliver it to your floor shortly.
             </p>
-            <p style={{ color: 'var(--gray-400)', fontSize: 12, fontFamily: 'monospace', marginBottom: 28 }}>Ref: {reference}</p>
+            <p style={{ color: 'var(--gray-400)', fontSize: 12, fontFamily: 'monospace', marginBottom: 28 }}>Ref: {txRef}</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <button className="btn btn-primary btn-full" onClick={() => navigate('/orders')}>
                 <ClipboardList size={15} />

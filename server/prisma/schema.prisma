@@ -34,6 +34,11 @@ enum AnnouncementType {
   GENERAL
 }
 
+enum PaymentMethod {
+  FLUTTERWAVE
+  BANK_TRANSFER
+}
+
 enum FoodCategory {
   RICE
   SWALLOW
@@ -129,19 +134,22 @@ model MenuItem {
 }
 
 model Order {
-  id           String      @id @default(cuid())
-  userId       String
-  user         User        @relation(fields: [userId], references: [id])
-  items        OrderItem[]
-  deliveryFee  Decimal     @db.Decimal(10, 2)
-  status       OrderStatus @default(PENDING)
-  floor        Floor
-  officeNumber String
-  phone        String
-  paystackRef  String?
-  paid         Boolean     @default(false)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id                String        @id @default(cuid())
+  reference         String        @unique
+  userId            String
+  user              User          @relation(fields: [userId], references: [id])
+  items             OrderItem[]
+  deliveryFee       Decimal       @db.Decimal(10, 2)
+  status            OrderStatus   @default(PENDING)
+  floor             Floor
+  officeNumber      String
+  phone             String
+  paymentMethod     PaymentMethod @default(FLUTTERWAVE)
+  paymentRef        String?
+  transferReference String?
+  paid              Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   @@map("orders")
 }
