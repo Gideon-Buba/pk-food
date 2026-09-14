@@ -27,6 +27,7 @@ function mockOrder(overrides: Record<string, unknown> = {}) {
     paymentMethod: 'FLUTTERWAVE',
     status: 'PENDING',
     deliveryFee: { toNumber: () => 300 },
+    packagingFee: { toNumber: () => 0 },
     items: [
       { unitPrice: { toNumber: () => 1500 }, quantity: 2 },
     ],
