@@ -124,7 +124,7 @@ export default function AdminDashboard() {
   const [editingVendorId, setEditingVendorId] = useState<string | null>(null);
   const [editingVendorName, setEditingVendorName] = useState('');
   const [showAddItem, setShowAddItem] = useState(false);
-  const [newItem, setNewItem] = useState({ name: '', price: '', vendorId: '', totalStock: '50', onlineStock: '50', image: '', category: '' as FoodCategory | '' });
+  const [newItem, setNewItem] = useState({ name: '', price: '', vendorId: '', totalStock: '50', onlineStock: '50', image: '', category: '' as FoodCategory | '', requiresPackaging: false });
   const [addingItem, setAddingItem] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -272,6 +272,7 @@ export default function AdminDashboard() {
         image: editingItem.image ?? undefined,
         vendorId: editingItem.vendorId,
         category: editingItem.category ?? undefined,
+        requiresPackaging: editingItem.requiresPackaging,
       });
       setMenuItems(prev => prev.map(m => m.id === editingItem.id ? { ...m, ...editingItem } : m));
       setEditingItem(null);
@@ -291,8 +292,9 @@ export default function AdminDashboard() {
         onlineStock: parseInt(newItem.onlineStock, 10),
         image: newItem.image || undefined,
         category: newItem.category || undefined,
+        requiresPackaging: newItem.requiresPackaging,
       });
-      setNewItem({ name: '', price: '', vendorId: '', totalStock: '50', onlineStock: '50', image: '', category: '' });
+      setNewItem({ name: '', price: '', vendorId: '', totalStock: '50', onlineStock: '50', image: '', category: '', requiresPackaging: false });
       setShowAddItem(false);
       load();
       toast.success('Menu item added');
@@ -336,7 +338,7 @@ export default function AdminDashboard() {
     } catch { toast.error('Failed to delete announcement'); }
   };
 
-  const orderTotal = (o: Order) => Number(o.deliveryFee) + o.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0);
+  const orderTotal = (o: Order) => Number(o.deliveryFee) + Number(o.packagingFee ?? 0) + o.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0);
 
   const today = new Date().toDateString();
   const paidOrders   = orders.filter(o => o.paid);
@@ -599,7 +601,7 @@ export default function AdminDashboard() {
                       </thead>
                       <tbody>
                         {filteredOrders.map(order => {
-                          const total = Number(order.deliveryFee) + order.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0);
+                          const total = orderTotal(order);
                           return (
                             <tr key={order.id}>
                               <td style={{ fontWeight: 500 }}>
@@ -972,6 +974,19 @@ export default function AdminDashboard() {
                         <label className="label">Image</label>
                         <ImageUploader value={newItem.image} onChange={url => setNewItem({ ...newItem, image: url })} />
                       </div>
+                      <div className="form-group" style={{ gridColumn: '1/-1' }}>
+                        <button
+                          type="button"
+                          onClick={() => setNewItem({ ...newItem, requiresPackaging: !newItem.requiresPackaging })}
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13, fontWeight: 600, color: 'var(--gray-700)' }}
+                        >
+                          {newItem.requiresPackaging ? <ToggleRight size={20} color="var(--primary)" /> : <ToggleLeft size={20} color="var(--gray-400)" />}
+                          Requires takeaway pack
+                        </button>
+                        <p style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 4 }}>
+                          Charges a per-pack packaging fee at checkout — tracked separately from food revenue.
+                        </p>
+                      </div>
                       <div style={{ gridColumn: '1/-1', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                         <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowAddItem(false)}>Cancel</button>
                         <button type="submit" className="btn btn-primary btn-sm" disabled={addingItem}>
@@ -1031,6 +1046,19 @@ export default function AdminDashboard() {
                           <label className="label">Image</label>
                           <ImageUploader value={editingItem.image ?? ''} onChange={url => setEditingItem({ ...editingItem, image: url })} />
                         </div>
+                        <div className="form-group" style={{ gridColumn: '1/-1' }}>
+                          <button
+                            type="button"
+                            onClick={() => setEditingItem({ ...editingItem, requiresPackaging: !editingItem.requiresPackaging })}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13, fontWeight: 600, color: 'var(--gray-700)' }}
+                          >
+                            {editingItem.requiresPackaging ? <ToggleRight size={20} color="var(--primary)" /> : <ToggleLeft size={20} color="var(--gray-400)" />}
+                            Requires takeaway pack
+                          </button>
+                          <p style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 4 }}>
+                            Charges a per-pack packaging fee at checkout — tracked separately from food revenue.
+                          </p>
+                        </div>
                         <div style={{ gridColumn: '1/-1', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                           <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingItem(null)}>Cancel</button>
                           <button type="submit" className="btn btn-primary btn-sm">Save changes</button>
@@ -1073,6 +1101,11 @@ export default function AdminDashboard() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                               <p style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</p>
                               <span className={`badge ${item.status === 'AVAILABLE' ? 'badge-green' : 'badge-red'}`} style={{ fontSize: 10, flexShrink: 0 }}>{item.status === 'AVAILABLE' ? 'Live' : 'Off'}</span>
+                              {item.requiresPackaging && (
+                                <span className="badge" style={{ fontSize: 10, flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--gray-600)', background: 'var(--gray-100)' }} title="Requires a takeaway pack">
+                                  <Package size={10} /> Pack
+                                </span>
+                              )}
                             </div>
                             <p style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 1 }}>
                               <span style={{ fontWeight: 700, color: 'var(--primary)' }}>₦{Number(item.price).toLocaleString()}</span>
@@ -1122,9 +1155,16 @@ export default function AdminDashboard() {
                           <p style={{ fontSize: 11, color: 'var(--gray-400)', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {item.vendor.name}{item.category ? ` · ${CATEGORY_META[item.category]?.label ?? item.category}` : ''}
                           </p>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 6 }}>
                             <span style={{ fontWeight: 800, color: 'var(--primary)', fontSize: 14 }}>₦{Number(item.price).toLocaleString()}</span>
-                            <span className={`badge ${item.status === 'AVAILABLE' ? 'badge-green' : 'badge-red'}`} style={{ fontSize: 10 }}>{item.status === 'AVAILABLE' ? 'Live' : 'Off'}</span>
+                            <span style={{ display: 'flex', gap: 4 }}>
+                              {item.requiresPackaging && (
+                                <span className="badge" style={{ fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--gray-600)', background: 'var(--gray-100)' }} title="Requires a takeaway pack">
+                                  <Package size={10} /> Pack
+                                </span>
+                              )}
+                              <span className={`badge ${item.status === 'AVAILABLE' ? 'badge-green' : 'badge-red'}`} style={{ fontSize: 10 }}>{item.status === 'AVAILABLE' ? 'Live' : 'Off'}</span>
+                            </span>
                           </div>
                           <p style={{ fontSize: 11, color: 'var(--gray-400)', marginBottom: 10 }}>{item.onlineStock} in stock</p>
                           <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>

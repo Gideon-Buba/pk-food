@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsEnum,
   IsInt,
   IsNotEmpty,
@@ -42,4 +43,8 @@ export class CreateMenuItemDto {
   @IsEnum(FoodCategory)
   @IsOptional()
   category?: FoodCategory;
+
+  @IsBoolean()
+  @IsOptional()
+  requiresPackaging?: boolean;
 }

@@ -42,6 +42,7 @@ export interface MenuItem {
   onlineStock: number;
   status: ItemStatus;
   category?: FoodCategory | null;
+  requiresPackaging: boolean;
 }
 
 export interface OrderItem {
@@ -50,6 +51,7 @@ export interface OrderItem {
   menuItemId: string;
   quantity: number;
   unitPrice: number;
+  requiresPackaging: boolean;
 }
 
 export type PaymentMethod = 'FLUTTERWAVE' | 'BANK_TRANSFER';
@@ -60,6 +62,7 @@ export interface Order {
   user: { name?: string | null; email: string; floor: string | null; officeNumber: string | null };
   items: OrderItem[];
   deliveryFee: number;
+  packagingFee: number;
   status: OrderStatus;
   floor: string;
   officeNumber: string;

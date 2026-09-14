@@ -52,6 +52,7 @@ export class MenuService {
         onlineStock: dto.onlineStock,
         status: dto.status ?? ItemStatus.AVAILABLE,
         category: dto.category ?? null,
+        requiresPackaging: dto.requiresPackaging ?? false,
       },
       include: { vendor: true },
     });
@@ -75,6 +76,7 @@ export class MenuService {
         ...(dto.onlineStock !== undefined && { onlineStock: dto.onlineStock }),
         ...(dto.status !== undefined && { status: dto.status }),
         ...(dto.category !== undefined && { category: dto.category }),
+        ...(dto.requiresPackaging !== undefined && { requiresPackaging: dto.requiresPackaging }),
       },
       include: { vendor: true },
     });

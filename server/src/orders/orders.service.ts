@@ -88,6 +88,11 @@ export class OrdersService {
         });
       }
 
+      const packagingUnits = dto.items.reduce((sum, orderItem) => {
+        const item = menuItems.find((m) => m.id === orderItem.menuItemId)!;
+        return sum + (item.requiresPackaging ? orderItem.quantity : 0);
+      }, 0);
+
       return tx.order.create({
         data: {
           userId: user.id,
@@ -96,6 +101,7 @@ export class OrdersService {
           officeNumber: dto.officeNumber ?? user.officeNumber ?? '',
           phone: dto.phone,
           deliveryFee: this.config.deliveryFee,
+          packagingFee: packagingUnits * this.config.packagingFee,
           items: {
             create: dto.items.map((orderItem) => {
               const item = menuItems.find((m) => m.id === orderItem.menuItemId)!;
@@ -103,6 +109,7 @@ export class OrdersService {
                 menuItemId: orderItem.menuItemId,
                 quantity: orderItem.quantity,
                 unitPrice: item.price,
+                requiresPackaging: item.requiresPackaging,
               };
             }),
           },

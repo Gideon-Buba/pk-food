@@ -9,6 +9,7 @@ import type { FloorValue } from '../constants/floors';
 import type { ApiResponse, Order } from '../types';
 
 const DELIVERY_FEE = Number(import.meta.env.VITE_DELIVERY_FEE ?? 300);
+const PACKAGING_FEE = Number(import.meta.env.VITE_PACKAGING_FEE ?? 50);
 
 interface FlutterwaveInitData { link: string; }
 interface BankDetails { bankName: string; accountName: string; accountNumber: string; contactPhone: string; }
@@ -35,7 +36,9 @@ export default function Checkout() {
   if (items.length === 0) { navigate('/cart'); return null; }
 
   const subtotal = itemsTotal();
-  const total = subtotal + DELIVERY_FEE;
+  const packagingUnits = items.reduce((s, ci) => s + (ci.menuItem.requiresPackaging ? ci.quantity : 0), 0);
+  const packagingFee = packagingUnits * PACKAGING_FEE;
+  const total = subtotal + DELIVERY_FEE + packagingFee;
 
   const apiMessage = (err: unknown): string => {
     const e = err as { response?: { data?: { message?: string } } };
@@ -223,9 +226,14 @@ export default function Checkout() {
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--gray-500)', marginBottom: 6 }}>
               <span>Subtotal</span><span>₦{subtotal.toLocaleString()}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--gray-500)', marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--gray-500)', marginBottom: packagingUnits > 0 ? 6 : 12 }}>
               <span>Delivery</span><span>₦{DELIVERY_FEE.toLocaleString()}</span>
             </div>
+            {packagingUnits > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--gray-500)', marginBottom: 12 }}>
+                <span>Takeaway packs ({packagingUnits})</span><span>₦{packagingFee.toLocaleString()}</span>
+              </div>
+            )}
             <hr className="divider" style={{ marginBottom: 12 }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 16, letterSpacing: '-0.02em' }}>
               <span>Total</span><span style={{ color: 'var(--primary)' }}>₦{total.toLocaleString()}</span>
