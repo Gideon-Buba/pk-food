@@ -3,6 +3,7 @@ import { ChevronLeft, Trash2, Plus, Minus, ShoppingCart } from 'lucide-react';
 import { useCartStore } from '../store/cart';
 
 const DELIVERY_FEE = Number(import.meta.env.VITE_DELIVERY_FEE ?? 300);
+const PACKAGING_FEE = Number(import.meta.env.VITE_PACKAGING_FEE ?? 50);
 
 export default function Cart() {
   const navigate = useNavigate();
@@ -32,7 +33,9 @@ export default function Cart() {
   }
 
   const subtotal = itemsTotal();
-  const total = subtotal + DELIVERY_FEE;
+  const packagingUnits = items.reduce((s, ci) => s + (ci.menuItem.requiresPackaging ? ci.quantity : 0), 0);
+  const packagingFee = packagingUnits * PACKAGING_FEE;
+  const total = subtotal + DELIVERY_FEE + packagingFee;
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
@@ -94,6 +97,12 @@ export default function Cart() {
                 <span>Delivery fee</span>
                 <span>₦{DELIVERY_FEE.toLocaleString()}</span>
               </div>
+              {packagingUnits > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--gray-600)' }}>
+                  <span>Takeaway packs ({packagingUnits})</span>
+                  <span>₦{packagingFee.toLocaleString()}</span>
+                </div>
+              )}
               <hr className="divider" style={{ margin: '4px 0' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17, fontWeight: 800, letterSpacing: '-0.02em' }}>
                 <span>Total</span>

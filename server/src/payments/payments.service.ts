@@ -91,7 +91,7 @@ export class PaymentsService {
       (sum, i) => sum + i.unitPrice.toNumber() * i.quantity,
       0,
     );
-    const totalNaira = itemsTotal + order.deliveryFee.toNumber();
+    const totalNaira = itemsTotal + order.deliveryFee.toNumber() + order.packagingFee.toNumber();
 
     // Redirect URL — Flutterwave appends ?status=&tx_ref=&transaction_id= automatically
     const redirectUrl = `${this.config.appUrl}/order-confirmation`;

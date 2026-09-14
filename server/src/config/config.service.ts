@@ -56,6 +56,10 @@ export class ConfigService {
     return parseInt(this.optional('DELIVERY_FEE', '300'), 10);
   }
 
+  get packagingFee(): number {
+    return parseInt(this.optional('PACKAGING_FEE', '50'), 10);
+  }
+
   // Manual bank-transfer payment option — details shown to the buyer at checkout
   get bankName(): string          { return this.optional('BANK_NAME', ''); }
   get bankAccountName(): string   { return this.optional('BANK_ACCOUNT_NAME', ''); }

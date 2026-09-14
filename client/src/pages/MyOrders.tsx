@@ -114,7 +114,8 @@ export default function MyOrders() {
 function OrderCard({ order, expanded, onToggle, onCancelled }: { order: Order; expanded: boolean; onToggle: () => void; onCancelled: (id: string) => void }) {
   const [cancelling, setCancelling] = useState(false);
   const meta = STATUS_META[order.status];
-  const total = Number(order.deliveryFee) + order.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0);
+  const total = Number(order.deliveryFee) + Number(order.packagingFee ?? 0) + order.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0);
+  const packCount = order.items.reduce((s, i) => s + (i.requiresPackaging ? i.quantity : 0), 0);
   const isActive = order.status !== 'DELIVERED' && order.status !== 'CANCELLED';
   const canCancel = order.status === 'PENDING' && !order.paid;
 
@@ -227,6 +228,12 @@ function OrderCard({ order, expanded, onToggle, onCancelled }: { order: Order; e
               <span>Delivery</span>
               <span>₦{Number(order.deliveryFee).toLocaleString()}</span>
             </div>
+            {packCount > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--gray-500)' }}>
+                <span>Takeaway packs ({packCount})</span>
+                <span>₦{Number(order.packagingFee ?? 0).toLocaleString()}</span>
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 14 }}>
               <span>Total</span>
               <span style={{ color: 'var(--primary)' }}>₦{total.toLocaleString()}</span>

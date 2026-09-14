@@ -26,7 +26,11 @@ function displayName(order: Order): string {
 }
 
 function totalValue(order: Order): number {
-  return Number(order.deliveryFee) + order.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0);
+  return Number(order.deliveryFee) + Number(order.packagingFee ?? 0) + order.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0);
+}
+
+function packCount(order: Order): number {
+  return order.items.reduce((s, i) => s + (i.requiresPackaging ? i.quantity : 0), 0);
 }
 
 function formatPhone(raw: string): string {
@@ -473,6 +477,11 @@ function OrderCard({ order, action, onAction, loading, highlight }: OrderCardPro
             <span>
               {item.menuItem.name}
               <span style={{ color: 'var(--gray-400)', marginLeft: 4 }}>×{item.quantity}</span>
+              {item.requiresPackaging && (
+                <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--gray-400)', display: 'inline-flex', alignItems: 'center', gap: 2 }} title="Needs a takeaway pack">
+                  <Package size={10} /> {item.quantity}
+                </span>
+              )}
             </span>
             <span style={{ fontWeight: 600 }}>₦{(Number(item.unitPrice) * item.quantity).toLocaleString()}</span>
           </div>
@@ -482,6 +491,7 @@ function OrderCard({ order, action, onAction, loading, highlight }: OrderCardPro
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>
           + ₦{Number(order.deliveryFee).toLocaleString()} delivery
+          {packCount(order) > 0 && ` · ${packCount(order)} pack${packCount(order) > 1 ? 's' : ''}`}
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className={`badge ${order.paid ? 'badge-green' : 'badge-yellow'}`}>
