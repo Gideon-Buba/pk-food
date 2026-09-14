@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Banknote, ChevronLeft, CreditCard, MapPin, Phone } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -6,10 +6,10 @@ import { api } from '../api/client';
 import { useCartStore } from '../store/cart';
 import { FLOORS } from '../constants/floors';
 import type { FloorValue } from '../constants/floors';
-import type { ApiResponse, Order } from '../types';
+import type { AppSettings, ApiResponse, Order } from '../types';
 
 const DELIVERY_FEE = Number(import.meta.env.VITE_DELIVERY_FEE ?? 300);
-const PACKAGING_FEE = Number(import.meta.env.VITE_PACKAGING_FEE ?? 50);
+const FALLBACK_PACKAGING_FEE = Number(import.meta.env.VITE_PACKAGING_FEE ?? 50);
 
 interface FlutterwaveInitData { link: string; }
 interface BankDetails { bankName: string; accountName: string; accountNumber: string; contactPhone: string; }
@@ -32,12 +32,19 @@ export default function Checkout() {
   const [orderId, setOrderId] = useState('');
   const [reference, setReference] = useState('');
   const [transferNote, setTransferNote] = useState('');
+  const [packagingFeePerUnit, setPackagingFeePerUnit] = useState(FALLBACK_PACKAGING_FEE);
+
+  useEffect(() => {
+    api.get<ApiResponse<AppSettings>>('/settings')
+      .then(({ data }) => setPackagingFeePerUnit(data.data.packagingFee))
+      .catch(() => undefined);
+  }, []);
 
   if (items.length === 0) { navigate('/cart'); return null; }
 
   const subtotal = itemsTotal();
   const packagingUnits = items.reduce((s, ci) => s + (ci.menuItem.requiresPackaging ? ci.quantity : 0), 0);
-  const packagingFee = packagingUnits * PACKAGING_FEE;
+  const packagingFee = packagingUnits * packagingFeePerUnit;
   const total = subtotal + DELIVERY_FEE + packagingFee;
 
   const apiMessage = (err: unknown): string => {

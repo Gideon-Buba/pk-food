@@ -4,7 +4,7 @@ import { Menu, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, S
 import QueuePanel from '../components/QueuePanel';
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
-import type { ApiResponse, FoodCategory, MenuItem, Order, OrderStatus, Vendor } from '../types';
+import type { ApiResponse, AppSettings, FoodCategory, MenuItem, Order, OrderStatus, Vendor } from '../types';
 import { CATEGORY_META, CATEGORY_ORDER } from '../constants/categories';
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -130,6 +130,9 @@ export default function AdminDashboard() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [newAnnouncement, setNewAnnouncement] = useState({ type: 'GENERAL' as 'STATUS' | 'GENERAL', message: '' });
   const [addingAnnouncement, setAddingAnnouncement] = useState(false);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [packagingFeeInput, setPackagingFeeInput] = useState('');
+  const [savingPackagingFee, setSavingPackagingFee] = useState(false);
 
   // Menu filters + view + bulk select
   const [menuSearch, setMenuSearch] = useState('');
@@ -153,8 +156,16 @@ export default function AdminDashboard() {
       api.get<ApiResponse<MenuItem[]>>('/menu/items?all=true'),
       api.get<ApiResponse<Vendor[]>>('/menu/vendors'),
       api.get<ApiResponse<Announcement[]>>('/menu/announcements/all'),
+      api.get<ApiResponse<AppSettings>>('/settings'),
     ])
-      .then(([o, m, v, a]) => { setOrders(o.data.data); setMenuItems(m.data.data); setVendors(v.data.data); setAnnouncements(a.data.data); })
+      .then(([o, m, v, a, s]) => {
+        setOrders(o.data.data);
+        setMenuItems(m.data.data);
+        setVendors(v.data.data);
+        setAnnouncements(a.data.data);
+        setSettings(s.data.data);
+        setPackagingFeeInput(String(s.data.data.packagingFee));
+      })
       .catch(() => toast.error('Failed to load data'))
       .finally(() => setLoading(false));
   };
@@ -300,6 +311,19 @@ export default function AdminDashboard() {
       toast.success('Menu item added');
     } catch { toast.error('Failed to add item'); }
     finally { setAddingItem(false); }
+  };
+
+  const handleSavePackagingFee = async () => {
+    const fee = parseInt(packagingFeeInput, 10);
+    if (isNaN(fee) || fee < 0) { toast.error('Enter a valid packaging fee'); return; }
+    setSavingPackagingFee(true);
+    try {
+      const res = await api.patch<ApiResponse<AppSettings>>('/settings', { packagingFee: fee });
+      setSettings(res.data.data);
+      setPackagingFeeInput(String(res.data.data.packagingFee));
+      toast.success('Packaging fee updated — past orders keep their original charge');
+    } catch { toast.error('Failed to update packaging fee'); }
+    finally { setSavingPackagingFee(false); }
   };
 
   const toggleItem = async (item: MenuItem) => {
@@ -833,6 +857,37 @@ export default function AdminDashboard() {
             {/* Menu tab */}
             {tab === 'menu' && (
               <div>
+                {/* Packaging fee setting */}
+                <div className="card" style={{ padding: 16, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <Package size={16} color="var(--gray-500)" />
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>Takeaway pack fee</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 13, color: 'var(--gray-400)' }}>₦</span>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0}
+                      value={packagingFeeInput}
+                      onChange={e => setPackagingFeeInput(e.target.value)}
+                      style={{ width: 90 }}
+                    />
+                    <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>per pack</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={savingPackagingFee || packagingFeeInput === String(settings?.packagingFee ?? '')}
+                    onClick={handleSavePackagingFee}
+                  >
+                    {savingPackagingFee ? <span className="spinner" style={{ width: 13, height: 13 }} /> : 'Save'}
+                  </button>
+                  <p style={{ fontSize: 11, color: 'var(--gray-400)', width: '100%', margin: 0 }}>
+                    Charged once per pack on items marked "Requires takeaway pack" below. Changing this only affects orders placed after the change — past orders keep the fee they were charged at the time.
+                  </p>
+                </div>
+
                 {/* Menu toolbar */}
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
                   <div style={{ position: 'relative', flex: 1, minWidth: 160 }}>

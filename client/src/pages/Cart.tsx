@@ -1,13 +1,23 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Trash2, Plus, Minus, ShoppingCart } from 'lucide-react';
+import { api } from '../api/client';
 import { useCartStore } from '../store/cart';
+import type { AppSettings, ApiResponse } from '../types';
 
 const DELIVERY_FEE = Number(import.meta.env.VITE_DELIVERY_FEE ?? 300);
-const PACKAGING_FEE = Number(import.meta.env.VITE_PACKAGING_FEE ?? 50);
+const FALLBACK_PACKAGING_FEE = Number(import.meta.env.VITE_PACKAGING_FEE ?? 50);
 
 export default function Cart() {
   const navigate = useNavigate();
   const { items, updateQuantity, removeItem, clearCart, itemsTotal } = useCartStore();
+  const [packagingFeePerUnit, setPackagingFeePerUnit] = useState(FALLBACK_PACKAGING_FEE);
+
+  useEffect(() => {
+    api.get<ApiResponse<AppSettings>>('/settings')
+      .then(({ data }) => setPackagingFeePerUnit(data.data.packagingFee))
+      .catch(() => undefined);
+  }, []);
 
   if (items.length === 0) {
     return (
@@ -34,7 +44,7 @@ export default function Cart() {
 
   const subtotal = itemsTotal();
   const packagingUnits = items.reduce((s, ci) => s + (ci.menuItem.requiresPackaging ? ci.quantity : 0), 0);
-  const packagingFee = packagingUnits * PACKAGING_FEE;
+  const packagingFee = packagingUnits * packagingFeePerUnit;
   const total = subtotal + DELIVERY_FEE + packagingFee;
 
   return (

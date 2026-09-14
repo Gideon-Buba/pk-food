@@ -9,6 +9,7 @@ import { OrdersService } from './orders.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { SettingsService } from '../settings/settings.service';
 
 // Build lightweight mock objects that match what the service code reads
 function mockMenuItem(overrides: Record<string, unknown> = {}) {
@@ -64,6 +65,7 @@ describe('OrdersService', () => {
   };
 
   const mockConfig = { deliveryFee: 300 };
+  const mockSettings = { getPackagingFee: jest.fn().mockResolvedValue(50) };
 
   beforeEach(async () => {
     prisma = {
@@ -92,6 +94,7 @@ describe('OrdersService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: ConfigService, useValue: mockConfig },
         { provide: NotificationsService, useValue: { notifyNewOrder: jest.fn().mockResolvedValue(undefined) } },
+        { provide: SettingsService, useValue: mockSettings },
       ],
     }).compile();
 

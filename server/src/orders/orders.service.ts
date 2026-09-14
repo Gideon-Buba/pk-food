@@ -9,6 +9,7 @@ import { ItemStatus, Order, OrderStatus, Prisma, Role, User } from '@prisma/clie
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { SettingsService } from '../settings/settings.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { generateOrderReference } from './order-reference.util';
@@ -36,6 +37,7 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly notifications: NotificationsService,
+    private readonly settings: SettingsService,
   ) {}
 
   async createOrder(user: User, dto: CreateOrderDto): Promise<Order> {
@@ -57,6 +59,8 @@ export class OrdersService {
   }
 
   private async createOrderOnce(user: User, dto: CreateOrderDto): Promise<Order> {
+    const packagingFeePerUnit = await this.settings.getPackagingFee();
+
     const order = await this.prisma.$transaction(async (tx) => {
       const menuItemIds = dto.items.map((i) => i.menuItemId);
       const menuItems = await tx.menuItem.findMany({
@@ -101,7 +105,7 @@ export class OrdersService {
           officeNumber: dto.officeNumber ?? user.officeNumber ?? '',
           phone: dto.phone,
           deliveryFee: this.config.deliveryFee,
-          packagingFee: packagingUnits * this.config.packagingFee,
+          packagingFee: packagingUnits * packagingFeePerUnit,
           items: {
             create: dto.items.map((orderItem) => {
               const item = menuItems.find((m) => m.id === orderItem.menuItemId)!;
