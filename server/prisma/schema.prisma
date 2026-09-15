@@ -179,3 +179,14 @@ model Announcement {
 
   @@map("announcements")
 }
+
+// Singleton row (id is always "singleton") holding admin-editable app settings.
+// Orders snapshot the fee at creation time (Order.packagingFee), so changing
+// this here never affects past orders — only ones placed after the change.
+model Settings {
+  id           String   @id @default("singleton")
+  packagingFee Int      @default(50)
+  updatedAt    DateTime @updatedAt
+
+  @@map("settings")
+}

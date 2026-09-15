@@ -87,6 +87,10 @@ export interface CartItem {
   quantity: number;
 }
 
+export interface AppSettings {
+  packagingFee: number;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data: T;

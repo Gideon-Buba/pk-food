@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Menu, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp, ImagePlus, X, LayoutGrid, LayoutList, Search, Truck } from 'lucide-react';
+import { Menu, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp, ImagePlus, X, LayoutGrid, LayoutList, Search, Truck, LogOut, ChevronDown } from 'lucide-react';
 import QueuePanel from '../components/QueuePanel';
 import toast from 'react-hot-toast';
-import { api } from '../api/client';
-import type { ApiResponse, FoodCategory, MenuItem, Order, OrderStatus, Vendor } from '../types';
+import { api, clearToken } from '../api/client';
+import type { ApiResponse, AppSettings, FoodCategory, MenuItem, Order, OrderStatus, User, Vendor } from '../types';
 import { CATEGORY_META, CATEGORY_ORDER } from '../constants/categories';
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -130,6 +130,11 @@ export default function AdminDashboard() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [newAnnouncement, setNewAnnouncement] = useState({ type: 'GENERAL' as 'STATUS' | 'GENERAL', message: '' });
   const [addingAnnouncement, setAddingAnnouncement] = useState(false);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [packagingFeeInput, setPackagingFeeInput] = useState('');
+  const [savingPackagingFee, setSavingPackagingFee] = useState(false);
+  const [me, setMe] = useState<User | null>(null);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
   // Menu filters + view + bulk select
   const [menuSearch, setMenuSearch] = useState('');
@@ -153,13 +158,26 @@ export default function AdminDashboard() {
       api.get<ApiResponse<MenuItem[]>>('/menu/items?all=true'),
       api.get<ApiResponse<Vendor[]>>('/menu/vendors'),
       api.get<ApiResponse<Announcement[]>>('/menu/announcements/all'),
+      api.get<ApiResponse<AppSettings>>('/settings'),
     ])
-      .then(([o, m, v, a]) => { setOrders(o.data.data); setMenuItems(m.data.data); setVendors(v.data.data); setAnnouncements(a.data.data); })
+      .then(([o, m, v, a, s]) => {
+        setOrders(o.data.data);
+        setMenuItems(m.data.data);
+        setVendors(v.data.data);
+        setAnnouncements(a.data.data);
+        setSettings(s.data.data);
+        setPackagingFeeInput(String(s.data.data.packagingFee));
+      })
       .catch(() => toast.error('Failed to load data'))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    api.get<ApiResponse<User>>('/auth/me').then(({ data }) => setMe(data.data)).catch(() => undefined);
+  }, []);
+
+  const handleLogout = () => { clearToken(); navigate('/login'); };
 
   const updateStatus = async (orderId: string, status: OrderStatus) => {
     try {
@@ -300,6 +318,19 @@ export default function AdminDashboard() {
       toast.success('Menu item added');
     } catch { toast.error('Failed to add item'); }
     finally { setAddingItem(false); }
+  };
+
+  const handleSavePackagingFee = async () => {
+    const fee = parseInt(packagingFeeInput, 10);
+    if (isNaN(fee) || fee < 0) { toast.error('Enter a valid packaging fee'); return; }
+    setSavingPackagingFee(true);
+    try {
+      const res = await api.patch<ApiResponse<AppSettings>>('/settings', { packagingFee: fee });
+      setSettings(res.data.data);
+      setPackagingFeeInput(String(res.data.data.packagingFee));
+      toast.success('Packaging fee updated — past orders keep their original charge');
+    } catch { toast.error('Failed to update packaging fee'); }
+    finally { setSavingPackagingFee(false); }
   };
 
   const toggleItem = async (item: MenuItem) => {
@@ -506,6 +537,56 @@ export default function AdminDashboard() {
             <Menu size={20} />
           </button>
           <span style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>Admin panel</span>
+
+          {/* Account menu */}
+          <div style={{ position: 'relative' }}>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setAccountMenuOpen(v => !v)}
+              style={{ gap: 6, fontSize: 13 }}
+            >
+              <span style={{
+                width: 24, height: 24, borderRadius: '50%', background: 'var(--primary-subtle)',
+                color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontWeight: 700, fontSize: 11, flexShrink: 0,
+              }}>
+                {(me?.name || me?.email || 'A').charAt(0).toUpperCase()}
+              </span>
+              <span className="admin-account-label" style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {me?.name || me?.email?.split('@')[0] || 'Admin'}
+              </span>
+              <ChevronDown size={14} style={{ transform: accountMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+            </button>
+
+            {accountMenuOpen && (
+              <>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 90 }} onClick={() => setAccountMenuOpen(false)} />
+                <div
+                  className="card"
+                  style={{
+                    position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 100,
+                    width: 220, padding: 6, boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                  }}
+                >
+                  <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--gray-100)', marginBottom: 4 }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{me?.name || 'Admin'}</p>
+                    <p style={{ fontSize: 11, color: 'var(--gray-400)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{me?.email}</p>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '8px 10px', borderRadius: 'var(--radius-sm)', border: 'none',
+                      background: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                      color: 'var(--error)', textAlign: 'left',
+                    }}
+                  >
+                    <LogOut size={15} /> Sign out
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
@@ -833,6 +914,37 @@ export default function AdminDashboard() {
             {/* Menu tab */}
             {tab === 'menu' && (
               <div>
+                {/* Packaging fee setting */}
+                <div className="card" style={{ padding: 16, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <Package size={16} color="var(--gray-500)" />
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>Takeaway pack fee</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 13, color: 'var(--gray-400)' }}>₦</span>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0}
+                      value={packagingFeeInput}
+                      onChange={e => setPackagingFeeInput(e.target.value)}
+                      style={{ width: 90 }}
+                    />
+                    <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>per pack</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={savingPackagingFee || packagingFeeInput === String(settings?.packagingFee ?? '')}
+                    onClick={handleSavePackagingFee}
+                  >
+                    {savingPackagingFee ? <span className="spinner" style={{ width: 13, height: 13 }} /> : 'Save'}
+                  </button>
+                  <p style={{ fontSize: 11, color: 'var(--gray-400)', width: '100%', margin: 0 }}>
+                    Charged once per pack on items marked "Requires takeaway pack" below. Changing this only affects orders placed after the change — past orders keep the fee they were charged at the time.
+                  </p>
+                </div>
+
                 {/* Menu toolbar */}
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
                   <div style={{ position: 'relative', flex: 1, minWidth: 160 }}>
