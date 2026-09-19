@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Menu, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp, ImagePlus, X, LayoutGrid, LayoutList, Search, Truck, LogOut, ChevronDown } from 'lucide-react';
+import { Menu, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp, ImagePlus, X, LayoutGrid, LayoutList, Search, Truck, LogOut, ChevronDown, ListPlus } from 'lucide-react';
 import QueuePanel from '../components/QueuePanel';
 import toast from 'react-hot-toast';
 import { api, clearToken } from '../api/client';
-import type { ApiResponse, AppSettings, FoodCategory, MenuItem, Order, OrderStatus, User, Vendor } from '../types';
+import type { ApiResponse, AppSettings, FoodCategory, MenuItem, Order, OrderStatus, Side, User, Vendor } from '../types';
 import { CATEGORY_META, CATEGORY_ORDER } from '../constants/categories';
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -74,7 +74,7 @@ function ImageUploader({ value, onChange }: ImageUploaderProps) {
   );
 }
 
-type Tab = 'orders' | 'menu' | 'vendors' | 'announcements' | 'revenue' | 'queue';
+type Tab = 'orders' | 'menu' | 'vendors' | 'sides' | 'announcements' | 'revenue' | 'queue';
 
 interface Announcement {
   id: string;
@@ -100,7 +100,7 @@ function statusBadgeClass(s: OrderStatus): string {
   return m[s];
 }
 
-const VALID_TABS: Tab[] = ['orders', 'revenue', 'menu', 'vendors', 'announcements', 'queue'];
+const VALID_TABS: Tab[] = ['orders', 'revenue', 'menu', 'vendors', 'sides', 'announcements', 'queue'];
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -127,6 +127,12 @@ export default function AdminDashboard() {
   const [newItem, setNewItem] = useState({ name: '', price: '', vendorId: '', totalStock: '50', onlineStock: '50', image: '', category: '' as FoodCategory | '', requiresPackaging: false });
   const [addingItem, setAddingItem] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+  const [itemSideIds, setItemSideIds] = useState<Set<string>>(new Set());
+  const [sides, setSides] = useState<Side[]>([]);
+  const [newSide, setNewSide] = useState({ name: '', price: '', vendorId: '' });
+  const [addingSide, setAddingSide] = useState(false);
+  const [editingSideId, setEditingSideId] = useState<string | null>(null);
+  const [editingSideDraft, setEditingSideDraft] = useState({ name: '', price: '', vendorId: '' });
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [newAnnouncement, setNewAnnouncement] = useState({ type: 'GENERAL' as 'STATUS' | 'GENERAL', message: '' });
   const [addingAnnouncement, setAddingAnnouncement] = useState(false);
@@ -159,14 +165,16 @@ export default function AdminDashboard() {
       api.get<ApiResponse<Vendor[]>>('/menu/vendors'),
       api.get<ApiResponse<Announcement[]>>('/menu/announcements/all'),
       api.get<ApiResponse<AppSettings>>('/settings'),
+      api.get<ApiResponse<Side[]>>('/menu/sides?all=true'),
     ])
-      .then(([o, m, v, a, s]) => {
+      .then(([o, m, v, a, s, sd]) => {
         setOrders(o.data.data);
         setMenuItems(m.data.data);
         setVendors(v.data.data);
         setAnnouncements(a.data.data);
         setSettings(s.data.data);
         setPackagingFeeInput(String(s.data.data.packagingFee));
+        setSides(sd.data.data);
       })
       .catch(() => toast.error('Failed to load data'))
       .finally(() => setLoading(false));
@@ -238,6 +246,74 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleCreateSide = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddingSide(true);
+    try {
+      const res = await api.post<ApiResponse<Side>>('/menu/sides', {
+        name: newSide.name,
+        price: newSide.price ? Number(newSide.price) : 0,
+        vendorId: newSide.vendorId,
+      });
+      setSides(s => [...s, res.data.data]);
+      setNewSide({ name: '', price: '', vendorId: '' });
+      toast.success('Side created');
+    } catch { toast.error('Failed to create side'); }
+    finally { setAddingSide(false); }
+  };
+
+  const handleUpdateSide = async (id: string) => {
+    if (!editingSideDraft.name.trim()) return;
+    try {
+      const res = await api.patch<ApiResponse<Side>>(`/menu/sides/${id}`, {
+        name: editingSideDraft.name,
+        price: Number(editingSideDraft.price),
+        vendorId: editingSideDraft.vendorId,
+      });
+      setSides(prev => prev.map(s => s.id === id ? res.data.data : s));
+      setEditingSideId(null);
+      toast.success('Side updated');
+    } catch { toast.error('Failed to update side'); }
+  };
+
+  const handleToggleSideStatus = async (side: Side) => {
+    const status = side.status === 'AVAILABLE' ? 'UNAVAILABLE' : 'AVAILABLE';
+    try {
+      const res = await api.patch<ApiResponse<Side>>(`/menu/sides/${side.id}`, { status });
+      setSides(prev => prev.map(s => s.id === side.id ? res.data.data : s));
+    } catch { toast.error('Failed to update side'); }
+  };
+
+  const handleDeleteSide = async (id: string, name: string) => {
+    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/menu/sides/${id}`);
+      setSides(prev => prev.filter(s => s.id !== id));
+      toast.success('Side deleted');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast.error(e.response?.data?.message ?? 'Failed to delete side');
+    }
+  };
+
+  const openEditItem = async (item: MenuItem) => {
+    setEditingItem(item);
+    try {
+      const res = await api.get<ApiResponse<Side[]>>(`/menu/items/${item.id}/sides`);
+      setItemSideIds(new Set(res.data.data.map(s => s.id)));
+    } catch {
+      setItemSideIds(new Set());
+    }
+  };
+
+  const toggleItemSide = (id: string) => {
+    setItemSideIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
   const handleDeleteItem = async (id: string, name: string) => {
     if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
     try {
@@ -292,6 +368,7 @@ export default function AdminDashboard() {
         category: editingItem.category ?? undefined,
         requiresPackaging: editingItem.requiresPackaging,
       });
+      await api.patch(`/menu/items/${editingItem.id}/sides`, { sideIds: [...itemSideIds] });
       setMenuItems(prev => prev.map(m => m.id === editingItem.id ? { ...m, ...editingItem } : m));
       setEditingItem(null);
       toast.success('Item updated');
@@ -459,6 +536,7 @@ export default function AdminDashboard() {
     { id: 'revenue',       label: 'Revenue',   Icon: TrendingUp  },
     { id: 'menu',          label: 'Menu',      Icon: Package     },
     { id: 'vendors',       label: 'Vendors',   Icon: Store       },
+    { id: 'sides',         label: 'Sides',     Icon: ListPlus    },
     { id: 'announcements', label: 'Notices',   Icon: Megaphone   },
   ];
 
@@ -1171,6 +1249,27 @@ export default function AdminDashboard() {
                             Charges a per-pack packaging fee at checkout — tracked separately from food revenue.
                           </p>
                         </div>
+                        <div className="form-group" style={{ gridColumn: '1/-1' }}>
+                          <label className="label">Sides offered</label>
+                          {sides.length === 0 ? (
+                            <p style={{ fontSize: 12, color: 'var(--gray-400)' }}>No sides yet — add some in the Sides tab.</p>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 160, overflowY: 'auto', border: '1px solid var(--gray-200)', borderRadius: 'var(--radius-md)', padding: 8 }}>
+                              {sides.map(side => (
+                                <label key={side.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={itemSideIds.has(side.id)}
+                                    onChange={() => toggleItemSide(side.id)}
+                                    style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--primary)' }}
+                                  />
+                                  {side.name} {side.price > 0 ? `(+₦${side.price.toLocaleString()})` : ''}
+                                  {side.status !== 'AVAILABLE' && <span style={{ color: 'var(--gray-400)' }}> — off</span>}
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                         <div style={{ gridColumn: '1/-1', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                           <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingItem(null)}>Cancel</button>
                           <button type="submit" className="btn btn-primary btn-sm">Save changes</button>
@@ -1231,7 +1330,7 @@ export default function AdminDashboard() {
                             <button className="btn btn-ghost btn-icon-sm" onClick={() => toggleItem(item)} title="Toggle availability">
                               {item.status === 'AVAILABLE' ? <ToggleRight size={20} color="var(--primary)" /> : <ToggleLeft size={20} color="var(--gray-400)" />}
                             </button>
-                            <button className="btn btn-ghost btn-icon-sm" title="Edit" onClick={() => setEditingItem(item)}>
+                            <button className="btn btn-ghost btn-icon-sm" title="Edit" onClick={() => openEditItem(item)}>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                               </svg>
@@ -1283,7 +1382,7 @@ export default function AdminDashboard() {
                             <button className="btn btn-ghost btn-icon-sm" onClick={() => toggleItem(item)} title="Toggle availability">
                               {item.status === 'AVAILABLE' ? <ToggleRight size={18} color="var(--primary)" /> : <ToggleLeft size={18} color="var(--gray-400)" />}
                             </button>
-                            <button className="btn btn-ghost btn-icon-sm" title="Edit item" onClick={() => setEditingItem(item)}>
+                            <button className="btn btn-ghost btn-icon-sm" title="Edit item" onClick={() => openEditItem(item)}>
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                               </svg>
@@ -1430,6 +1529,83 @@ export default function AdminDashboard() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {tab === 'sides' && (
+              <div>
+                <form onSubmit={handleCreateSide} style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+                  <input className="input" placeholder="Side name (e.g. Plantain)" value={newSide.name} onChange={e => setNewSide({ ...newSide, name: e.target.value })} required style={{ flex: 2, minWidth: 160 }} />
+                  <input className="input" type="number" placeholder="Price (₦)" value={newSide.price} onChange={e => setNewSide({ ...newSide, price: e.target.value })} style={{ flex: 1, minWidth: 100 }} />
+                  <select className="input" value={newSide.vendorId} onChange={e => setNewSide({ ...newSide, vendorId: e.target.value })} required style={{ flex: 1, minWidth: 140, cursor: 'pointer' }}>
+                    <option value="" disabled>Vendor</option>
+                    {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </select>
+                  <button type="submit" className="btn btn-primary" disabled={addingSide}>
+                    {addingSide ? <span className="spinner" /> : <Plus size={15} />}
+                    Add side
+                  </button>
+                </form>
+                {sides.length === 0 ? (
+                  <div className="empty-state" style={{ padding: 40 }}>
+                    <ListPlus className="empty-state-icon" />
+                    <h3>No sides yet</h3>
+                    <p>Add a side above, then attach it to menu items from the Menu tab.</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {sides.map(side => (
+                      <div key={side.id} className="card" style={{ padding: '14px 16px' }}>
+                        {editingSideId === side.id ? (
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <input className="input" value={editingSideDraft.name} onChange={e => setEditingSideDraft({ ...editingSideDraft, name: e.target.value })} autoFocus style={{ flex: 2, minWidth: 140 }} />
+                            <input className="input" type="number" value={editingSideDraft.price} onChange={e => setEditingSideDraft({ ...editingSideDraft, price: e.target.value })} style={{ flex: 1, minWidth: 90 }} />
+                            <select className="input" value={editingSideDraft.vendorId} onChange={e => setEditingSideDraft({ ...editingSideDraft, vendorId: e.target.value })} style={{ flex: 1, minWidth: 120, cursor: 'pointer' }}>
+                              {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                            </select>
+                            <button className="btn btn-primary btn-sm" onClick={() => handleUpdateSide(side.id)}>Save</button>
+                            <button className="btn btn-secondary btn-sm" onClick={() => setEditingSideId(null)}>Cancel</button>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-md)', background: 'var(--primary-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <ListPlus size={16} color="var(--primary)" />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {side.name}
+                                <span className={`badge ${side.status === 'AVAILABLE' ? 'badge-green' : 'badge-red'}`} style={{ fontSize: 10 }}>{side.status === 'AVAILABLE' ? 'Live' : 'Off'}</span>
+                              </p>
+                              <p style={{ fontSize: 12, color: 'var(--gray-400)' }}>
+                                {side.price > 0 ? `+₦${side.price.toLocaleString()}` : 'Free'} · {vendors.find(v => v.id === side.vendorId)?.name ?? '—'}
+                              </p>
+                            </div>
+                            <button className="btn btn-ghost btn-icon-sm" onClick={() => handleToggleSideStatus(side)} title="Toggle availability">
+                              {side.status === 'AVAILABLE' ? <ToggleRight size={20} color="var(--primary)" /> : <ToggleLeft size={20} color="var(--gray-400)" />}
+                            </button>
+                            <button
+                              className="btn btn-ghost btn-icon-sm"
+                              title="Edit"
+                              onClick={() => { setEditingSideId(side.id); setEditingSideDraft({ name: side.name, price: String(side.price), vendorId: side.vendorId }); }}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                              </svg>
+                            </button>
+                            <button
+                              className="btn btn-ghost btn-icon-sm"
+                              title="Delete side"
+                              style={{ color: 'var(--error)' }}
+                              onClick={() => handleDeleteSide(side.id, side.name)}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
