@@ -66,7 +66,10 @@ describe('OrdersService', () => {
   };
 
   const mockConfig = { deliveryFee: 300 };
-  const mockSettings = { getPackagingFee: jest.fn().mockResolvedValue(50) };
+  const mockSettings = {
+    getPackagingFee: jest.fn().mockResolvedValue(50),
+    get: jest.fn().mockResolvedValue({ packagingFee: 50, openTime: '08:00', closeTime: '20:00', isOpen: true }),
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -115,6 +118,12 @@ describe('OrdersService', () => {
     phone: '08000000000',
   };
     const actor = mockUser();
+
+    it('throws BadRequestException when the store is closed', async () => {
+      mockSettings.get.mockResolvedValueOnce({ packagingFee: 50, openTime: '08:00', closeTime: '20:00', isOpen: false });
+
+      await expect(service.createOrder(actor as never, dto)).rejects.toThrow(BadRequestException);
+    });
 
     it('throws NotFoundException when a menu item does not exist', async () => {
       prisma.menuItem.findMany.mockResolvedValue([]);

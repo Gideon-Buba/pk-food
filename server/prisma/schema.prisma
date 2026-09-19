@@ -234,6 +234,9 @@ model Announcement {
 model Settings {
   id           String   @id @default("singleton")
   packagingFee Int      @default(50)
+  // "HH:mm" 24h, evaluated in Africa/Lagos — see store-hours.util.ts
+  openTime     String   @default("08:00")
+  closeTime    String   @default("20:00")
   updatedAt    DateTime @updatedAt
 
   @@map("settings")

@@ -41,6 +41,13 @@ export class OrdersService {
   ) {}
 
   async createOrder(user: User, dto: CreateOrderDto): Promise<Order> {
+    const settings = await this.settings.get();
+    if (!settings.isOpen) {
+      throw new BadRequestException(
+        `We're closed right now. Orders open again at ${settings.openTime}.`,
+      );
+    }
+
     // Retry on the (very rare) reference collision from the @unique constraint.
     for (let attempt = 0; ; attempt++) {
       try {
