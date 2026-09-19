@@ -66,33 +66,42 @@ export default function Cart() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Items */}
           <div className="card" style={{ overflow: 'hidden' }}>
-            {items.map((ci, idx) => (
-              <div key={ci.menuItem.id}>
-                <div style={{ padding: '16px', display: 'flex', gap: 14, alignItems: 'center' }}>
-                  {ci.menuItem.image ? (
-                    <img src={ci.menuItem.image} alt={ci.menuItem.name} style={{ width: 60, height: 60, borderRadius: 'var(--radius-md)', objectFit: 'cover', flexShrink: 0 }} />
-                  ) : (
-                    <div style={{ width: 60, height: 60, borderRadius: 'var(--radius-md)', background: 'var(--gray-100)', flexShrink: 0 }} />
-                  )}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ci.menuItem.name}</p>
-                    <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 8 }}>{ci.menuItem.vendor.name}</p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <button className="qty-btn" onClick={() => updateQuantity(ci.menuItem.id, ci.quantity - 1)}><Minus size={12} /></button>
-                      <span style={{ fontSize: 14, fontWeight: 700, minWidth: 24, textAlign: 'center' }}>{ci.quantity}</span>
-                      <button className="qty-btn" onClick={() => updateQuantity(ci.menuItem.id, ci.quantity + 1)}><Plus size={12} /></button>
+            {items.map((ci, idx) => {
+              const sidesPrice = ci.selectedSides.reduce((s, side) => s + side.price, 0);
+              const lineTotal = (ci.menuItem.price + sidesPrice) * ci.quantity;
+              return (
+                <div key={ci.lineId}>
+                  <div style={{ padding: '16px', display: 'flex', gap: 14, alignItems: 'center' }}>
+                    {ci.menuItem.image ? (
+                      <img src={ci.menuItem.image} alt={ci.menuItem.name} style={{ width: 60, height: 60, borderRadius: 'var(--radius-md)', objectFit: 'cover', flexShrink: 0 }} />
+                    ) : (
+                      <div style={{ width: 60, height: 60, borderRadius: 'var(--radius-md)', background: 'var(--gray-100)', flexShrink: 0 }} />
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ci.menuItem.name}</p>
+                      <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 8 }}>{ci.menuItem.vendor.name}</p>
+                      {ci.selectedSides.length > 0 && (
+                        <p style={{ fontSize: 12, color: 'var(--gray-500)', marginBottom: 8 }}>
+                          + {ci.selectedSides.map((s) => s.name).join(', ')}
+                        </p>
+                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <button className="qty-btn" onClick={() => updateQuantity(ci.lineId, ci.quantity - 1)}><Minus size={12} /></button>
+                        <span style={{ fontSize: 14, fontWeight: 700, minWidth: 24, textAlign: 'center' }}>{ci.quantity}</span>
+                        <button className="qty-btn" onClick={() => updateQuantity(ci.lineId, ci.quantity + 1)}><Plus size={12} /></button>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                      <span style={{ fontWeight: 800, fontSize: 15, color: 'var(--primary)' }}>₦{lineTotal.toLocaleString()}</span>
+                      <button className="btn btn-ghost btn-icon-sm" onClick={() => removeItem(ci.lineId)} style={{ color: 'var(--gray-400)' }}>
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-                    <span style={{ fontWeight: 800, fontSize: 15, color: 'var(--primary)' }}>₦{(Number(ci.menuItem.price) * ci.quantity).toLocaleString()}</span>
-                    <button className="btn btn-ghost btn-icon-sm" onClick={() => removeItem(ci.menuItem.id)} style={{ color: 'var(--gray-400)' }}>
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+                  {idx < items.length - 1 && <hr className="divider" />}
                 </div>
-                {idx < items.length - 1 && <hr className="divider" />}
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Summary */}

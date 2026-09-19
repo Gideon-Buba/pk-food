@@ -22,20 +22,23 @@ import { CATEGORY_META, CATEGORY_ORDER } from "../constants/categories";
 import type {
   ApiResponse,
   Announcement,
+  CartItem,
   FoodCategory,
   JwtPayload,
   MenuItem,
+  Side,
 } from "../types";
 
 interface ItemCardProps {
   item: MenuItem;
   index: number;
-  cartItem: { quantity: number } | undefined;
+  totalQty: number;
+  simpleLine: CartItem | undefined;
   onAdd: (item: MenuItem) => void;
-  onUpdate: (id: string, qty: number) => void;
+  onUpdate: (lineId: string, qty: number) => void;
 }
 
-function ItemCard({ item, index, cartItem, onAdd, onUpdate }: ItemCardProps) {
+function ItemCard({ item, index, totalQty, simpleLine, onAdd, onUpdate }: ItemCardProps) {
   const available = item.status === "AVAILABLE";
   return (
     <div
@@ -117,7 +120,7 @@ function ItemCard({ item, index, cartItem, onAdd, onUpdate }: ItemCardProps) {
         >
           {item.vendor.name}
         </div>
-        {cartItem && (
+        {totalQty > 0 && (
           <div
             style={{
               position: "absolute",
@@ -131,7 +134,7 @@ function ItemCard({ item, index, cartItem, onAdd, onUpdate }: ItemCardProps) {
               fontWeight: 700,
             }}
           >
-            {cartItem.quantity} in cart
+            {totalQty} in cart
           </div>
         )}
         {!available && (
@@ -202,11 +205,11 @@ function ItemCard({ item, index, cartItem, onAdd, onUpdate }: ItemCardProps) {
           >
             &#8358;{Number(item.price).toLocaleString()}
           </span>
-          {cartItem ? (
+          {simpleLine ? (
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <button
                 className="qty-btn"
-                onClick={() => onUpdate(item.id, cartItem.quantity - 1)}
+                onClick={() => onUpdate(simpleLine.lineId, simpleLine.quantity - 1)}
               >
                 <Minus size={12} />
               </button>
@@ -218,11 +221,11 @@ function ItemCard({ item, index, cartItem, onAdd, onUpdate }: ItemCardProps) {
                   textAlign: "center",
                 }}
               >
-                {cartItem.quantity}
+                {simpleLine.quantity}
               </span>
               <button
                 className="qty-btn"
-                onClick={() => onUpdate(item.id, cartItem.quantity + 1)}
+                onClick={() => onUpdate(simpleLine.lineId, simpleLine.quantity + 1)}
               >
                 <Plus size={12} />
               </button>
@@ -267,6 +270,200 @@ function ItemCard({ item, index, cartItem, onAdd, onUpdate }: ItemCardProps) {
   );
 }
 
+interface SidePickerModalProps {
+  item: MenuItem;
+  sides: Side[] | null;
+  onClose: () => void;
+  onConfirm: (selectedSides: Side[]) => void;
+}
+
+function SidePickerModal({ item, sides, onClose, onConfirm }: SidePickerModalProps) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const loading = sides === null;
+
+  const toggle = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const sidesTotal = (sides ?? [])
+    .filter((s) => selected.has(s.id))
+    .reduce((sum, s) => sum + s.price, 0);
+  const total = item.price + sidesTotal;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.5)",
+        display: "flex",
+        alignItems: "flex-end",
+        justifyContent: "center",
+        zIndex: 100,
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#fff",
+          borderRadius: "20px 20px 0 0",
+          width: "100%",
+          maxWidth: 480,
+          maxHeight: "92vh",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
+        {/* Drag handle */}
+        <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 0" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--gray-200)" }} />
+        </div>
+
+        {/* Scrollable content */}
+        <div style={{ overflowY: "auto", flex: 1 }}>
+          {/* Food image banner */}
+          <div style={{ position: "relative", height: 200, background: "var(--gray-100)", marginTop: 8 }}>
+            {item.image ? (
+              <img
+                src={item.image}
+                alt={item.name}
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              />
+            ) : (
+              <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--primary-subtle)" }}>
+                <UtensilsCrossed size={40} color="var(--primary-light)" />
+              </div>
+            )}
+            <button
+              onClick={onClose}
+              style={{
+                position: "absolute",
+                top: 12,
+                right: 12,
+                width: 30,
+                height: 30,
+                borderRadius: "50%",
+                background: "rgba(0,0,0,0.5)",
+                backdropFilter: "blur(4px)",
+                border: "none",
+                cursor: "pointer",
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <X size={16} />
+            </button>
+            <div
+              style={{
+                position: "absolute",
+                bottom: 10,
+                left: 12,
+                background: "rgba(0,0,0,0.55)",
+                backdropFilter: "blur(4px)",
+                color: "#fff",
+                borderRadius: 20,
+                padding: "3px 10px",
+                fontSize: 11,
+                fontWeight: 600,
+                fontFamily: "var(--font-ui)",
+                letterSpacing: "0.03em",
+              }}
+            >
+              {item.vendor.name}
+            </div>
+          </div>
+
+          <div style={{ padding: "16px 20px 4px" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 4 }}>
+              <p style={{ fontWeight: 700, fontSize: 18, margin: 0, lineHeight: 1.3 }}>{item.name}</p>
+              <span
+                style={{
+                  fontSize: 17,
+                  fontWeight: 800,
+                  color: "var(--primary)",
+                  fontFamily: "var(--font-display)",
+                  letterSpacing: "-0.02em",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                &#8358;{item.price.toLocaleString()}
+              </span>
+            </div>
+
+            <p style={{ fontSize: 13, color: "var(--gray-500)", marginTop: 12, marginBottom: 10, fontWeight: 600 }}>
+              Add sides (optional)
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+              {sides === null
+                ? Array.from({ length: 3 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="skeleton"
+                      style={{ height: 46, borderRadius: 12 }}
+                    />
+                  ))
+                : sides.map((side) => {
+                const checked = selected.has(side.id);
+                return (
+                  <label
+                    key={side.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "12px 14px",
+                      borderRadius: 12,
+                      border: `1.5px solid ${checked ? "var(--primary)" : "var(--gray-200)"}`,
+                      background: checked ? "var(--primary-subtle)" : "transparent",
+                      cursor: "pointer",
+                      transition: "border-color 0.15s, background 0.15s",
+                    }}
+                  >
+                    <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggle(side.id)}
+                        style={{ width: 17, height: 17, accentColor: "var(--primary)" }}
+                      />
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>{side.name}</span>
+                    </span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: side.price > 0 ? "var(--gray-600)" : "var(--gray-400)" }}>
+                      {side.price > 0 ? `+₦${side.price.toLocaleString()}` : "Free"}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Sticky footer */}
+        <div style={{ padding: "14px 20px", borderTop: "1px solid var(--gray-100)", flexShrink: 0 }}>
+          <button
+            className="btn btn-primary btn-lg btn-full"
+            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}
+            disabled={loading}
+            onClick={() => onConfirm((sides ?? []).filter((s) => selected.has(s.id)))}
+          >
+            <span>{loading ? "Loading…" : "Add to cart"}</span>
+            <span style={{ fontWeight: 800 }}>&#8358;{total.toLocaleString()}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function greeting() {
   const h = new Date().getHours();
   if (h < 12) return "Good Morning";
@@ -292,6 +489,8 @@ export default function Menu() {
     "all",
   );
   const [userName, setUserName] = useState<string>("");
+  const [sidePicker, setSidePicker] = useState<{ item: MenuItem; sides: Side[] | null } | null>(null);
+  const activeSidePickerItemId = useRef<string | null>(null);
   const navigate = useNavigate();
   const {
     items: cartItems,
@@ -338,8 +537,15 @@ export default function Menu() {
     return matchCategory && matchSearch;
   });
 
-  const getCartItem = (id: string) =>
-    cartItems.find((i) => i.menuItem.id === id);
+  const linesForItem = (id: string) => cartItems.filter((i) => i.menuItem.id === id);
+  const totalQtyForItem = (id: string) =>
+    linesForItem(id).reduce((sum, i) => sum + i.quantity, 0);
+  const simpleLineForItem = (id: string) => {
+    const lines = linesForItem(id);
+    return lines.length === 1 && lines[0].selectedSides.length === 0
+      ? lines[0]
+      : undefined;
+  };
 
   // Group by category; only when viewing all categories and not searching
   const hasCategories = filtered.some((i) => i.category != null);
@@ -362,8 +568,37 @@ export default function Menu() {
   }
 
   const handleAdd = (item: MenuItem) => {
-    addItem(item);
-    toast.success(`Added to cart`, { id: item.id, duration: 1000 });
+    // Open the sheet immediately with a skeleton — don't block on the network first.
+    activeSidePickerItemId.current = item.id;
+    setSidePicker({ item, sides: null });
+
+    api
+      .get<ApiResponse<Side[]>>(`/menu/items/${item.id}/sides`)
+      .then((res) => {
+        if (activeSidePickerItemId.current !== item.id) return; // cancelled before the fetch resolved
+        const fetchedSides = res.data.data;
+        if (fetchedSides.length === 0) {
+          setSidePicker(null);
+          addItem(item);
+          toast.success(`Added to cart`, { id: item.id, duration: 1000 });
+        } else {
+          setSidePicker({ item, sides: fetchedSides });
+        }
+      })
+      .catch(() => {
+        if (activeSidePickerItemId.current !== item.id) return;
+        setSidePicker(null);
+        addItem(item);
+        toast.success(`Added to cart`, { id: item.id, duration: 1000 });
+      });
+  };
+
+  const confirmSidePicker = (selectedSides: Side[]) => {
+    if (!sidePicker) return;
+    addItem(sidePicker.item, selectedSides);
+    toast.success(`Added to cart`, { id: sidePicker.item.id, duration: 1000 });
+    activeSidePickerItemId.current = null;
+    setSidePicker(null);
   };
 
   const count = itemCount();
@@ -1034,7 +1269,8 @@ export default function Menu() {
                 key={item.id}
                 item={item}
                 index={i}
-                cartItem={getCartItem(item.id)}
+                totalQty={totalQtyForItem(item.id)}
+                simpleLine={simpleLineForItem(item.id)}
                 onAdd={handleAdd}
                 onUpdate={updateQuantity}
               />
@@ -1062,7 +1298,8 @@ export default function Menu() {
                       key={item.id}
                       item={item}
                       index={i}
-                      cartItem={getCartItem(item.id)}
+                      totalQty={totalQtyForItem(item.id)}
+                      simpleLine={simpleLineForItem(item.id)}
                       onAdd={handleAdd}
                       onUpdate={updateQuantity}
                     />
@@ -1132,6 +1369,15 @@ export default function Menu() {
             <ShoppingCart size={18} />
           </button>
         </div>
+      )}
+
+      {sidePicker && (
+        <SidePickerModal
+          item={sidePicker.item}
+          sides={sidePicker.sides}
+          onClose={() => { activeSidePickerItemId.current = null; setSidePicker(null); }}
+          onConfirm={confirmSidePicker}
+        />
       )}
     </div>
   );

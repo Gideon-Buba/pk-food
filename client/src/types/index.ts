@@ -45,6 +45,21 @@ export interface MenuItem {
   requiresPackaging: boolean;
 }
 
+export interface Side {
+  id: string;
+  name: string;
+  price: number;
+  vendorId: string;
+  status: ItemStatus;
+}
+
+export interface OrderItemSide {
+  id: string;
+  sideId: string;
+  name: string;
+  price: number;
+}
+
 export interface OrderItem {
   id: string;
   menuItem: MenuItem;
@@ -52,6 +67,7 @@ export interface OrderItem {
   quantity: number;
   unitPrice: number;
   requiresPackaging: boolean;
+  sides: OrderItemSide[];
 }
 
 export type PaymentMethod = 'FLUTTERWAVE' | 'BANK_TRANSFER';
@@ -83,8 +99,10 @@ export interface Announcement {
 }
 
 export interface CartItem {
+  lineId: string;
   menuItem: MenuItem;
   quantity: number;
+  selectedSides: Side[];
 }
 
 export interface AppSettings {
