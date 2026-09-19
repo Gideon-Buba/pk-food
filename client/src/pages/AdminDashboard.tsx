@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Menu, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp, ImagePlus, X, LayoutGrid, LayoutList, Search, Truck, LogOut, ChevronDown, ListPlus } from 'lucide-react';
+import { Menu, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp, ImagePlus, X, LayoutGrid, LayoutList, Search, Truck, LogOut, ChevronDown, ListPlus, Clock } from 'lucide-react';
 import QueuePanel from '../components/QueuePanel';
 import toast from 'react-hot-toast';
 import { api, clearToken } from '../api/client';
@@ -139,6 +139,9 @@ export default function AdminDashboard() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [packagingFeeInput, setPackagingFeeInput] = useState('');
   const [savingPackagingFee, setSavingPackagingFee] = useState(false);
+  const [openTimeInput, setOpenTimeInput] = useState('');
+  const [closeTimeInput, setCloseTimeInput] = useState('');
+  const [savingHours, setSavingHours] = useState(false);
   const [me, setMe] = useState<User | null>(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
@@ -174,6 +177,8 @@ export default function AdminDashboard() {
         setAnnouncements(a.data.data);
         setSettings(s.data.data);
         setPackagingFeeInput(String(s.data.data.packagingFee));
+        setOpenTimeInput(s.data.data.openTime);
+        setCloseTimeInput(s.data.data.closeTime);
         setSides(sd.data.data);
       })
       .catch(() => toast.error('Failed to load data'))
@@ -408,6 +413,21 @@ export default function AdminDashboard() {
       toast.success('Packaging fee updated — past orders keep their original charge');
     } catch { toast.error('Failed to update packaging fee'); }
     finally { setSavingPackagingFee(false); }
+  };
+
+  const handleSaveHours = async () => {
+    setSavingHours(true);
+    try {
+      const res = await api.patch<ApiResponse<AppSettings>>('/settings', {
+        openTime: openTimeInput,
+        closeTime: closeTimeInput,
+      });
+      setSettings(res.data.data);
+      setOpenTimeInput(res.data.data.openTime);
+      setCloseTimeInput(res.data.data.closeTime);
+      toast.success('Opening hours updated');
+    } catch { toast.error('Failed to update opening hours'); }
+    finally { setSavingHours(false); }
   };
 
   const toggleItem = async (item: MenuItem) => {
@@ -714,6 +734,50 @@ export default function AdminDashboard() {
             {/* Orders tab */}
             {tab === 'orders' && (
               <div>
+                {/* Store hours */}
+                <div className="card" style={{ padding: 16, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <Clock size={16} color="var(--gray-500)" />
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>Ordering hours</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input
+                      className="input"
+                      type="time"
+                      value={openTimeInput}
+                      onChange={e => setOpenTimeInput(e.target.value)}
+                      style={{ width: 110 }}
+                    />
+                    <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>to</span>
+                    <input
+                      className="input"
+                      type="time"
+                      value={closeTimeInput}
+                      onChange={e => setCloseTimeInput(e.target.value)}
+                      style={{ width: 110 }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={savingHours || (openTimeInput === settings?.openTime && closeTimeInput === settings?.closeTime)}
+                    onClick={handleSaveHours}
+                  >
+                    {savingHours ? <span className="spinner" style={{ width: 13, height: 13 }} /> : 'Save'}
+                  </button>
+                  {settings && (
+                    <span
+                      className={`badge ${settings.isOpen ? 'badge-green' : 'badge-red'}`}
+                      style={{ fontSize: 11, marginLeft: 'auto' }}
+                    >
+                      {settings.isOpen ? 'Open now' : 'Closed now'}
+                    </span>
+                  )}
+                  <p style={{ fontSize: 11, color: 'var(--gray-400)', width: '100%', margin: 0 }}>
+                    Staff can't place new orders outside these hours (Africa/Lagos time). Orders already placed are unaffected.
+                  </p>
+                </div>
+
                 {/* Orders toolbar */}
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
                   <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
