@@ -57,7 +57,11 @@ export default function Checkout() {
     setLoading(true);
     try {
       const orderRes = await api.post<ApiResponse<Order>>('/orders', {
-        items: items.map(({ menuItem, quantity }) => ({ menuItemId: menuItem.id, quantity })),
+        items: items.map(({ menuItem, quantity, selectedSides }) => ({
+          menuItemId: menuItem.id,
+          quantity,
+          sideIds: selectedSides.map((s) => s.id),
+        })),
         floor, officeNumber, phone,
       });
       const newOrderId = orderRes.data.data.id;
@@ -222,12 +226,20 @@ export default function Checkout() {
           <div className="card" style={{ padding: 20 }}>
             <h3 className="section-title" style={{ marginBottom: 16 }}>Order summary</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-              {items.map(ci => (
-                <div key={ci.menuItem.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, gap: 8 }}>
-                  <span style={{ color: 'var(--gray-600)', flex: 1 }}>{ci.menuItem.name} <span style={{ color: 'var(--gray-400)' }}>×{ci.quantity}</span></span>
-                  <span style={{ fontWeight: 600, flexShrink: 0 }}>₦{(Number(ci.menuItem.price) * ci.quantity).toLocaleString()}</span>
-                </div>
-              ))}
+              {items.map(ci => {
+                const sidesPrice = ci.selectedSides.reduce((s, side) => s + side.price, 0);
+                return (
+                  <div key={ci.lineId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, gap: 8 }}>
+                    <span style={{ color: 'var(--gray-600)', flex: 1 }}>
+                      {ci.menuItem.name} <span style={{ color: 'var(--gray-400)' }}>×{ci.quantity}</span>
+                      {ci.selectedSides.length > 0 && (
+                        <><br /><span style={{ color: 'var(--gray-400)', fontSize: 12 }}>+ {ci.selectedSides.map(s => s.name).join(', ')}</span></>
+                      )}
+                    </span>
+                    <span style={{ fontWeight: 600, flexShrink: 0 }}>₦{((Number(ci.menuItem.price) + sidesPrice) * ci.quantity).toLocaleString()}</span>
+                  </div>
+                );
+              })}
             </div>
             <hr className="divider" style={{ marginBottom: 12 }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--gray-500)', marginBottom: 6 }}>

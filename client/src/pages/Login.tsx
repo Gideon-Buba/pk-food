@@ -253,7 +253,7 @@ export default function Login() {
                   {isRegister ? 'Create account' : 'Sign in'}
                 </h1>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {isRegister ? 'Join with your NRS work email' : 'Use your NRS work email to continue'}
+                  {isRegister ? 'Join with your work email' : 'Use your work email to continue'}
                 </p>
               </div>
 
@@ -295,7 +295,7 @@ export default function Login() {
 
                 <div className="space-y-1.5">
                   <Label htmlFor="email">Work email</Label>
-                  <Input id="email" type="email" placeholder="john.doe@nrs.gov.ng"
+                  <Input id="email" type="email" placeholder="you@example.com"
                     value={email} onChange={e => setEmail(e.target.value)} required autoFocus />
                 </div>
 
@@ -361,10 +361,6 @@ export default function Login() {
                   {loading ? (isRegister ? 'Creating account…' : 'Signing in…') : isRegister ? 'Create account' : 'Sign in'}
                 </Button>
               </form>
-
-              <p className="text-xs text-muted-foreground text-center mt-4">
-                Only @nrs.gov.ng addresses are accepted
-              </p>
 
               {IS_DEV && (
                 <div className="mt-6">

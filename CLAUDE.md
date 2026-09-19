@@ -9,7 +9,7 @@ delivered to their floor/office. Like Glovo but inside one building.
 
 - Backend: NestJS + TypeScript (strict mode)
 - Database: PostgreSQL via Prisma ORM
-- Auth: Magic link via email, restricted to @nrs.gov.ng domain
+- Auth: Email + password, with email verification (no domain restriction)
 - Payments: Paystack (initialize + verify + webhook)
 - File uploads: Cloudinary (food item images)
 - Frontend: React (Vite) — same monorepo under /client

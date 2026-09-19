@@ -62,10 +62,14 @@ describe('OrdersService', () => {
     order: Record<string, jest.Mock>;
     orderItem: Record<string, jest.Mock>;
     menuItem: Record<string, jest.Mock>;
+    menuItemSide: Record<string, jest.Mock>;
   };
 
   const mockConfig = { deliveryFee: 300 };
-  const mockSettings = { getPackagingFee: jest.fn().mockResolvedValue(50) };
+  const mockSettings = {
+    getPackagingFee: jest.fn().mockResolvedValue(50),
+    get: jest.fn().mockResolvedValue({ packagingFee: 50, openTime: '08:00', closeTime: '20:00', isOpen: true }),
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -83,6 +87,7 @@ describe('OrdersService', () => {
         findUnique: jest.fn(),
         update: jest.fn(),
       },
+      menuItemSide: { findMany: jest.fn().mockResolvedValue([]) },
     };
 
     // Default: $transaction calls the callback with the same mock (tx === prisma)
@@ -113,6 +118,12 @@ describe('OrdersService', () => {
     phone: '08000000000',
   };
     const actor = mockUser();
+
+    it('throws BadRequestException when the store is closed', async () => {
+      mockSettings.get.mockResolvedValueOnce({ packagingFee: 50, openTime: '08:00', closeTime: '20:00', isOpen: false });
+
+      await expect(service.createOrder(actor as never, dto)).rejects.toThrow(BadRequestException);
+    });
 
     it('throws NotFoundException when a menu item does not exist', async () => {
       prisma.menuItem.findMany.mockResolvedValue([]);

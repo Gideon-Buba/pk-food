@@ -23,7 +23,7 @@ const VALID_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
 };
 
 const orderInclude = {
-  items: { include: { menuItem: { include: { vendor: true } } } },
+  items: { include: { menuItem: { include: { vendor: true } }, sides: true } },
   user: { select: { name: true, email: true, floor: true, officeNumber: true } },
 } satisfies Prisma.OrderInclude;
 
@@ -41,6 +41,13 @@ export class OrdersService {
   ) {}
 
   async createOrder(user: User, dto: CreateOrderDto): Promise<Order> {
+    const settings = await this.settings.get();
+    if (!settings.isOpen) {
+      throw new BadRequestException(
+        `We're closed right now. Orders open again at ${settings.openTime}.`,
+      );
+    }
+
     // Retry on the (very rare) reference collision from the @unique constraint.
     for (let attempt = 0; ; attempt++) {
       try {
@@ -97,6 +104,29 @@ export class OrdersService {
         return sum + (item.requiresPackaging ? orderItem.quantity : 0);
       }, 0);
 
+      // Sides offered per menu item, so we can validate each chosen sideId
+      // actually belongs to that item and hasn't been retired.
+      const offeredSides = await tx.menuItemSide.findMany({
+        where: { menuItemId: { in: menuItemIds } },
+        include: { side: true },
+      });
+
+      for (const orderItem of dto.items) {
+        for (const sideId of orderItem.sideIds ?? []) {
+          const link = offeredSides.find(
+            (s) => s.menuItemId === orderItem.menuItemId && s.sideId === sideId,
+          );
+          if (!link) {
+            throw new BadRequestException(
+              `Side ${sideId} is not offered for menu item ${orderItem.menuItemId}`,
+            );
+          }
+          if (link.side.status !== ItemStatus.AVAILABLE) {
+            throw new BadRequestException(`"${link.side.name}" is no longer available`);
+          }
+        }
+      }
+
       return tx.order.create({
         data: {
           userId: user.id,
@@ -114,11 +144,21 @@ export class OrdersService {
                 quantity: orderItem.quantity,
                 unitPrice: item.price,
                 requiresPackaging: item.requiresPackaging,
+                sides: {
+                  create: (orderItem.sideIds ?? []).map((sideId) => {
+                    const link = offeredSides.find((s) => s.sideId === sideId)!;
+                    return {
+                      sideId,
+                      name: link.side.name,
+                      price: link.side.price,
+                    };
+                  }),
+                },
               };
             }),
           },
         },
-        include: { items: { include: { menuItem: true } }, user: true },
+        include: { items: { include: { menuItem: true, sides: true } }, user: true },
       });
     }, { timeout: 15000 });
 

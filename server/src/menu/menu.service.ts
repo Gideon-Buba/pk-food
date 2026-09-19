@@ -1,16 +1,25 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Announcement, AnnouncementType, FoodCategory, ItemStatus, MenuItem, Vendor } from '@prisma/client';
+import { Announcement, AnnouncementType, FoodCategory, ItemStatus, MenuItem, Side, Vendor } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMenuItemDto } from './dto/create-menu-item.dto';
 import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
 import { CreateVendorDto } from './dto/create-vendor.dto';
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
+import { CreateSideDto } from './dto/create-side.dto';
+import { UpdateSideDto } from './dto/update-side.dto';
 
 type MenuItemWithVendor = MenuItem & { vendor: Vendor; category: FoodCategory | null };
 type SerializedMenuItem = Omit<MenuItemWithVendor, 'price'> & { price: number };
 
 function serializeItem(item: MenuItemWithVendor): SerializedMenuItem {
   const { price, ...rest } = item;
+  return { ...rest, price: price.toNumber() };
+}
+
+type SerializedSide = Omit<Side, 'price'> & { price: number };
+
+function serializeSide(side: Side): SerializedSide {
+  const { price, ...rest } = side;
   return { ...rest, price: price.toNumber() };
 }
 
@@ -141,5 +150,92 @@ export class MenuService {
     const existing = await this.prisma.announcement.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Announcement not found');
     await this.prisma.announcement.delete({ where: { id } });
+  }
+
+  async findAllSides(onlyAvailable = false): Promise<SerializedSide[]> {
+    const sides = await this.prisma.side.findMany({
+      where: onlyAvailable ? { status: ItemStatus.AVAILABLE } : undefined,
+      orderBy: { name: 'asc' },
+    });
+    return sides.map(serializeSide);
+  }
+
+  async findOneSide(id: string): Promise<SerializedSide> {
+    const side = await this.prisma.side.findUnique({ where: { id } });
+    if (!side) throw new NotFoundException('Side not found');
+    return serializeSide(side);
+  }
+
+  async createSide(dto: CreateSideDto): Promise<SerializedSide> {
+    const vendorExists = await this.prisma.vendor.findUnique({ where: { id: dto.vendorId } });
+    if (!vendorExists) throw new NotFoundException('Vendor not found');
+
+    const side = await this.prisma.side.create({
+      data: {
+        name: dto.name,
+        price: dto.price ?? 0,
+        vendorId: dto.vendorId,
+      },
+    });
+    return serializeSide(side);
+  }
+
+  async updateSide(id: string, dto: UpdateSideDto): Promise<SerializedSide> {
+    await this.findOneSide(id);
+
+    const side = await this.prisma.side.update({
+      where: { id },
+      data: {
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.price !== undefined && { price: dto.price }),
+        ...(dto.vendorId !== undefined && { vendorId: dto.vendorId }),
+        ...(dto.status !== undefined && { status: dto.status }),
+      },
+    });
+    return serializeSide(side);
+  }
+
+  // Hard delete only when the side was never actually ordered — otherwise
+  // retire it via status so past OrderItemSide rows keep a valid reference.
+  async removeSide(id: string): Promise<void> {
+    await this.findOneSide(id);
+    const usedInOrders = await this.prisma.orderItemSide.findFirst({ where: { sideId: id } });
+    if (usedInOrders) {
+      throw new BadRequestException(
+        'This side has already been ordered — set it to UNAVAILABLE instead of deleting it',
+      );
+    }
+    await this.prisma.side.delete({ where: { id } });
+  }
+
+  async findSidesForItem(menuItemId: string): Promise<SerializedSide[]> {
+    await this.findOneItem(menuItemId);
+    const links = await this.prisma.menuItemSide.findMany({
+      where: { menuItemId },
+      include: { side: true },
+      orderBy: { side: { name: 'asc' } },
+    });
+    return links.map((link) => serializeSide(link.side));
+  }
+
+  // Replaces the full set of sides offered by a menu item with `sideIds`.
+  async setSidesForItem(menuItemId: string, sideIds: string[]): Promise<SerializedSide[]> {
+    await this.findOneItem(menuItemId);
+
+    if (sideIds.length > 0) {
+      const existingSides = await this.prisma.side.findMany({ where: { id: { in: sideIds } } });
+      if (existingSides.length !== new Set(sideIds).size) {
+        throw new BadRequestException('One or more sides do not exist');
+      }
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.menuItemSide.deleteMany({ where: { menuItemId } }),
+      this.prisma.menuItemSide.createMany({
+        data: sideIds.map((sideId) => ({ menuItemId, sideId })),
+      }),
+    ]);
+
+    return this.findSidesForItem(menuItemId);
   }
 }

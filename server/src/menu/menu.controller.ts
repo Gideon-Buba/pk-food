@@ -15,6 +15,9 @@ import { CreateMenuItemDto } from './dto/create-menu-item.dto';
 import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
 import { CreateVendorDto } from './dto/create-vendor.dto';
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
+import { CreateSideDto } from './dto/create-side.dto';
+import { UpdateSideDto } from './dto/update-side.dto';
+import { SetMenuItemSidesDto } from './dto/set-menu-item-sides.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -59,6 +62,51 @@ export class MenuController {
   async removeItem(@Param('id') id: string) {
     await this.menuService.removeItem(id);
     return { data: null, message: 'Menu item deleted' };
+  }
+
+  @Get('items/:id/sides')
+  async findSidesForItem(@Param('id') id: string) {
+    const data = await this.menuService.findSidesForItem(id);
+    return { data, message: 'OK' };
+  }
+
+  @Patch('items/:id/sides')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  async setSidesForItem(@Param('id') id: string, @Body() dto: SetMenuItemSidesDto) {
+    const data = await this.menuService.setSidesForItem(id, dto.sideIds);
+    return { data, message: 'Sides updated' };
+  }
+
+  @Get('sides')
+  async findAllSides(@Query('all') all?: string) {
+    const onlyAvailable = all !== 'true';
+    const data = await this.menuService.findAllSides(onlyAvailable);
+    return { data, message: 'OK' };
+  }
+
+  @Post('sides')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  async createSide(@Body() dto: CreateSideDto) {
+    const data = await this.menuService.createSide(dto);
+    return { data, message: 'Side created' };
+  }
+
+  @Patch('sides/:id')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  async updateSide(@Param('id') id: string, @Body() dto: UpdateSideDto) {
+    const data = await this.menuService.updateSide(id, dto);
+    return { data, message: 'Side updated' };
+  }
+
+  @Delete('sides/:id')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  async removeSide(@Param('id') id: string) {
+    await this.menuService.removeSide(id);
+    return { data: null, message: 'Side deleted' };
   }
 
   @Get('vendors')

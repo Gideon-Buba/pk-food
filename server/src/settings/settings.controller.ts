@@ -21,7 +21,7 @@ export class SettingsController {
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
   async update(@Body() dto: UpdateSettingsDto) {
-    const data = await this.settingsService.updatePackagingFee(dto.packagingFee);
+    const data = await this.settingsService.update(dto);
     return { data, message: 'Settings updated' };
   }
 }
