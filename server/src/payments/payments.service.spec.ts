@@ -29,7 +29,7 @@ function mockOrder(overrides: Record<string, unknown> = {}) {
     deliveryFee: { toNumber: () => 300 },
     packagingFee: { toNumber: () => 0 },
     items: [
-      { unitPrice: { toNumber: () => 1500 }, quantity: 2 },
+      { unitPrice: { toNumber: () => 1500 }, quantity: 2, sides: [] },
     ],
     user: { email: 'alice@nrs.gov.ng', name: 'Alice' },
     ...overrides,

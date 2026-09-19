@@ -79,7 +79,7 @@ export class PaymentsService {
       where: { id: dto.orderId },
       include: {
         user: { select: { email: true, name: true } },
-        items: true,
+        items: { include: { sides: true } },
       },
     });
 
@@ -87,10 +87,10 @@ export class PaymentsService {
     if (order.userId !== userId) throw new ForbiddenException();
     if (order.paid) throw new BadRequestException('Order already paid');
 
-    const itemsTotal = order.items.reduce(
-      (sum, i) => sum + i.unitPrice.toNumber() * i.quantity,
-      0,
-    );
+    const itemsTotal = order.items.reduce((sum, i) => {
+      const sidesTotal = i.sides.reduce((s, side) => s + side.price.toNumber(), 0);
+      return sum + (i.unitPrice.toNumber() + sidesTotal) * i.quantity;
+    }, 0);
     const totalNaira = itemsTotal + order.deliveryFee.toNumber() + order.packagingFee.toNumber();
 
     // Redirect URL — Flutterwave appends ?status=&tx_ref=&transaction_id= automatically

@@ -243,7 +243,7 @@ VPS deploy steps:
 ```bash
 git stash && git pull origin main
 cd client && npm install && npm run build
-cd ../server && npm install && npm run build
+cd ../server && npm install && npx prisma migrate deploy && npx prisma generate && npm run build
 pm2 restart pk-food-server --update-env
 ```
 

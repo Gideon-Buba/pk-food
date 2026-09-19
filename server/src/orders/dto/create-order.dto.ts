@@ -1,8 +1,10 @@
 import {
+  ArrayUnique,
   IsArray,
   IsEnum,
   IsInt,
   IsNotEmpty,
+  IsOptional,
   IsPositive,
   IsString,
   Matches,
@@ -19,6 +21,12 @@ export class CreateOrderItemDto {
   @IsInt()
   @IsPositive()
   quantity!: number;
+
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  @IsOptional()
+  sideIds?: string[];
 }
 
 export class CreateOrderDto {

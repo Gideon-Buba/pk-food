@@ -109,6 +109,7 @@ model Vendor {
   id        String     @id @default(cuid())
   name      String
   items     MenuItem[]
+  sides     Side[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
@@ -116,22 +117,53 @@ model Vendor {
 }
 
 model MenuItem {
-  id                String        @id @default(cuid())
+  id                String         @id @default(cuid())
   name              String
-  price             Decimal       @db.Decimal(10, 2)
+  price             Decimal        @db.Decimal(10, 2)
   image             String?
   vendorId          String
-  vendor            Vendor        @relation(fields: [vendorId], references: [id])
-  totalStock        Int           @default(0)
-  onlineStock       Int           @default(0)
-  status            ItemStatus    @default(AVAILABLE)
+  vendor            Vendor         @relation(fields: [vendorId], references: [id])
+  totalStock        Int            @default(0)
+  onlineStock       Int            @default(0)
+  status            ItemStatus     @default(AVAILABLE)
   category          FoodCategory?
-  requiresPackaging Boolean       @default(false)
+  requiresPackaging Boolean        @default(false)
   orderItems        OrderItem[]
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  sides             MenuItemSide[]
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
   @@map("menu_items")
+}
+
+// A side a vendor can offer (e.g. plantain, coleslaw). Independent of any
+// one dish — MenuItemSide says which sides a given dish actually offers.
+model Side {
+  id        String          @id @default(cuid())
+  name      String
+  price     Decimal         @default(0) @db.Decimal(10, 2)
+  vendorId  String
+  vendor    Vendor          @relation(fields: [vendorId], references: [id])
+  status    ItemStatus      @default(AVAILABLE)
+  menuItems MenuItemSide[]
+  orderUses OrderItemSide[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@map("sides")
+}
+
+// Join: which sides a given MenuItem offers.
+model MenuItemSide {
+  id         String   @id @default(cuid())
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  sideId     String
+  side       Side     @relation(fields: [sideId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([menuItemId, sideId])
+  @@map("menu_item_sides")
 }
 
 model Order {
@@ -157,16 +189,32 @@ model Order {
 }
 
 model OrderItem {
-  id                String   @id @default(cuid())
+  id                String          @id @default(cuid())
   orderId           String
-  order             Order    @relation(fields: [orderId], references: [id])
+  order             Order           @relation(fields: [orderId], references: [id])
   menuItemId        String
-  menuItem          MenuItem @relation(fields: [menuItemId], references: [id])
+  menuItem          MenuItem        @relation(fields: [menuItemId], references: [id])
   quantity          Int
-  unitPrice         Decimal  @db.Decimal(10, 2)
-  requiresPackaging Boolean  @default(false)
+  unitPrice         Decimal         @db.Decimal(10, 2)
+  requiresPackaging Boolean         @default(false)
+  sides             OrderItemSide[]
 
   @@map("order_items")
+}
+
+// What was actually picked for one OrderItem, with the side's name and price
+// snapshotted at order time (same reasoning as OrderItem.unitPrice) so
+// renaming/repricing/retiring a Side later never rewrites order history.
+model OrderItemSide {
+  id          String    @id @default(cuid())
+  orderItemId String
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  sideId      String
+  side        Side      @relation(fields: [sideId], references: [id])
+  name        String
+  price       Decimal   @db.Decimal(10, 2)
+
+  @@map("order_item_sides")
 }
 
 model Announcement {

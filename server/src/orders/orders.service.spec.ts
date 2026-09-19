@@ -62,6 +62,7 @@ describe('OrdersService', () => {
     order: Record<string, jest.Mock>;
     orderItem: Record<string, jest.Mock>;
     menuItem: Record<string, jest.Mock>;
+    menuItemSide: Record<string, jest.Mock>;
   };
 
   const mockConfig = { deliveryFee: 300 };
@@ -83,6 +84,7 @@ describe('OrdersService', () => {
         findUnique: jest.fn(),
         update: jest.fn(),
       },
+      menuItemSide: { findMany: jest.fn().mockResolvedValue([]) },
     };
 
     // Default: $transaction calls the callback with the same mock (tx === prisma)
