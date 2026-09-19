@@ -107,6 +107,9 @@ export interface CartItem {
 
 export interface AppSettings {
   packagingFee: number;
+  openTime: string;
+  closeTime: string;
+  isOpen: boolean;
 }
 
 export interface ApiResponse<T> {

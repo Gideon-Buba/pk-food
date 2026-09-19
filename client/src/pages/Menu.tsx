@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
 import {
@@ -14,6 +14,7 @@ import {
   Settings,
   UtensilsCrossed,
   User,
+  Clock,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { api, clearToken, getToken } from "../api/client";
@@ -21,6 +22,7 @@ import { useCartStore } from "../store/cart";
 import { CATEGORY_META, CATEGORY_ORDER } from "../constants/categories";
 import type {
   ApiResponse,
+  AppSettings,
   Announcement,
   CartItem,
   FoodCategory,
@@ -464,6 +466,270 @@ function SidePickerModal({ item, sides, onClose, onConfirm }: SidePickerModalPro
   );
 }
 
+function formatTime12(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  const period = h >= 12 ? "PM" : "AM";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+function lagosClock(): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "Africa/Lagos",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  }).format(new Date());
+}
+
+interface ClosedScreenProps {
+  openTime: string;
+  closeTime: string;
+  userName: string;
+  onLogout: () => void;
+}
+
+function ClosedScreen({ openTime, closeTime, userName, onLogout }: ClosedScreenProps) {
+  const navigate = useNavigate();
+  const [clock, setClock] = useState(lagosClock);
+
+  useEffect(() => {
+    const id = setInterval(() => setClock(lagosClock()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const navBtnStyle: CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "8px 14px",
+    borderRadius: 20,
+    background: "rgba(255,255,255,0.1)",
+    border: "1px solid rgba(255,255,255,0.2)",
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: 600,
+    fontFamily: "var(--font-ui)",
+    cursor: "pointer",
+    transition: "background 0.15s",
+  };
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        position: "relative",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        backgroundImage: "url(/canteen.png)",
+        backgroundSize: "cover",
+        backgroundPosition: "center 40%",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "linear-gradient(160deg, rgba(15,32,27,0.94) 0%, rgba(26,56,48,0.9) 45%, rgba(49,103,82,0.85) 100%)",
+        }}
+      />
+
+      {/* Top bar */}
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "20px 24px",
+          flexWrap: "wrap",
+          gap: 12,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <img
+            src="/logo.jpeg"
+            alt="PK"
+            style={{ height: 32, width: "auto", borderRadius: 6 }}
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
+          <span
+            style={{
+              fontFamily: "var(--font-heading)",
+              fontSize: 18,
+              color: "#fff",
+              letterSpacing: "0.03em",
+            }}
+          >
+            PK Food
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            style={navBtnStyle}
+            onClick={() => navigate("/orders")}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.18)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.1)")}
+          >
+            My orders
+          </button>
+          <button
+            style={navBtnStyle}
+            onClick={() => navigate("/profile")}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.18)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.1)")}
+          >
+            Profile
+          </button>
+          <button
+            style={{ ...navBtnStyle, padding: 8 }}
+            onClick={onLogout}
+            title="Sign out"
+            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.18)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.1)")}
+          >
+            <LogOut size={15} />
+          </button>
+        </div>
+      </div>
+
+      {/* Center content */}
+      <div
+        className="fade-up"
+        style={{
+          position: "relative",
+          zIndex: 1,
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          textAlign: "center",
+          padding: "24px 24px 60px",
+        }}
+      >
+        <div style={{ position: "relative", marginBottom: 28 }}>
+          <div
+            style={{
+              width: 84,
+              height: 84,
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.12)",
+              backdropFilter: "blur(6px)",
+              border: "1px solid rgba(255,255,255,0.25)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Clock size={34} color="#fff" strokeWidth={1.5} />
+          </div>
+          <span
+            style={{
+              position: "absolute",
+              top: -2,
+              right: -2,
+              width: 14,
+              height: 14,
+              borderRadius: "50%",
+              background: "#e2704a",
+              border: "2px solid rgba(26,56,48,1)",
+            }}
+          >
+            <span
+              className="active-order-bar__dot"
+              style={{ position: "absolute", inset: 2, background: "#fff" }}
+            />
+          </span>
+        </div>
+
+        <p
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color: "rgba(255,255,255,0.55)",
+            marginBottom: 10,
+            fontFamily: "var(--font-ui)",
+          }}
+        >
+          PK Canteen · NRS HQ
+        </p>
+
+        <h1
+          style={{
+            fontSize: 34,
+            fontWeight: 500,
+            color: "#fff",
+            fontFamily: "var(--font-heading)",
+            letterSpacing: "0.01em",
+            marginBottom: 10,
+            maxWidth: 440,
+          }}
+        >
+          {userName ? `We're closed, ${userName}` : "We're closed right now"}
+        </h1>
+
+        <p
+          style={{
+            fontSize: 15,
+            color: "rgba(255,255,255,0.75)",
+            marginBottom: 28,
+            maxWidth: 380,
+            lineHeight: 1.6,
+            fontFamily: "var(--font-ui)",
+          }}
+        >
+          Orders are open daily from{" "}
+          <strong style={{ color: "#fff", fontWeight: 700 }}>{formatTime12(openTime)}</strong>{" "}
+          to <strong style={{ color: "#fff", fontWeight: 700 }}>{formatTime12(closeTime)}</strong>.
+          Come back then and we'll have it ready.
+        </p>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "10px 20px",
+            borderRadius: 30,
+            background: "rgba(255,255,255,0.08)",
+            border: "1px solid rgba(255,255,255,0.15)",
+          }}
+        >
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: "#6fcf97",
+              animation: "aob-pulse 1.8s ease-in-out infinite",
+              flexShrink: 0,
+            }}
+          />
+          <span
+            style={{
+              fontSize: 13,
+              color: "rgba(255,255,255,0.85)",
+              fontFamily: "var(--font-ui)",
+              letterSpacing: "0.03em",
+            }}
+          >
+            Lagos time — {clock}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function greeting() {
   const h = new Date().getHours();
   if (h < 12) return "Good Morning";
@@ -489,6 +755,7 @@ export default function Menu() {
     "all",
   );
   const [userName, setUserName] = useState<string>("");
+  const [storeHours, setStoreHours] = useState<AppSettings | null>(null);
   const [sidePicker, setSidePicker] = useState<{ item: MenuItem; sides: Side[] | null } | null>(null);
   const activeSidePickerItemId = useRef<string | null>(null);
   const navigate = useNavigate();
@@ -509,15 +776,28 @@ export default function Menu() {
       api.get<ApiResponse<MenuItem[]>>("/menu/items"),
       api.get<ApiResponse<Announcement[]>>("/menu/announcements"),
       api.get<ApiResponse<{ name?: string | null; email: string }>>("/auth/me"),
+      api.get<ApiResponse<AppSettings>>("/settings"),
     ])
-      .then(([ir, ar, ur]) => {
+      .then(([ir, ar, ur, sr]) => {
         setItems(ir.data.data);
         setAnnouncements(ar.data.data);
         const u = ur.data.data;
         setUserName(u.name ? u.name.split(" ")[0] : u.email.split("@")[0]);
+        setStoreHours(sr.data.data);
       })
       .catch(() => toast.error("Failed to load menu"))
       .finally(() => setLoading(false));
+  }, []);
+
+  // Re-check store hours periodically so open/closed flips without a manual refresh.
+  useEffect(() => {
+    const id = setInterval(() => {
+      api
+        .get<ApiResponse<AppSettings>>("/settings")
+        .then((res) => setStoreHours(res.data.data))
+        .catch(() => undefined);
+    }, 60000);
+    return () => clearInterval(id);
   }, []);
 
   const vendorNames = Array.from(new Set(items.map((i) => i.vendor.name)));
@@ -637,6 +917,20 @@ export default function Menu() {
 
   // Initials for avatar
   const initials = userName ? userName[0].toUpperCase() : "?";
+
+  if (!loading && storeHours && !storeHours.isOpen) {
+    return (
+      <ClosedScreen
+        openTime={storeHours.openTime}
+        closeTime={storeHours.closeTime}
+        userName={userName}
+        onLogout={() => {
+          clearToken();
+          navigate("/login");
+        }}
+      />
+    );
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: "#f4f6f4" }}>
