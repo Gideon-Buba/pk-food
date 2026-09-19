@@ -16,7 +16,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
 import { Floor } from '@prisma/client';
 
-const ALLOWED_DOMAIN = 'nrs.gov.ng';
 const VERIFY_TTL_HOURS = 24;
 const RESET_TTL_MINUTES = 60;
 
@@ -109,13 +108,6 @@ export class AuthService {
   }
 
   async register(email: string, password: string, name: string, phone?: string): Promise<void> {
-    const domain = email.split('@')[1];
-    if (domain !== ALLOWED_DOMAIN) {
-      throw new BadRequestException(
-        `Only @${ALLOWED_DOMAIN} email addresses are allowed`,
-      );
-    }
-
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing && existing.emailVerified) {
       throw new ConflictException('An account with this email already exists');

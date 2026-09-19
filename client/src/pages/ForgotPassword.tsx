@@ -60,7 +60,7 @@ export default function ForgotPassword() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="you@nrs.gov.ng"
+                  placeholder="you@example.com"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   required

@@ -84,12 +84,6 @@ describe('AuthService', () => {
   // ── register ──────────────────────────────────────────────────────────────
 
   describe('register', () => {
-    it('blocks non-@nrs.gov.ng emails', async () => {
-      await expect(
-        service.register('user@gmail.com', 'pass', 'User'),
-      ).rejects.toThrow(BadRequestException);
-    });
-
     it('throws ConflictException when the account is already verified', async () => {
       prismaUser.findUnique.mockResolvedValue(user({ emailVerified: true }));
       await expect(
