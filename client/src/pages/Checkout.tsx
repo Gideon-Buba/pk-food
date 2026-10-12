@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, CreditCard, MapPin, Phone } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
-import { lineTotal, useCartStore } from '../store/cart';
+import { lineSavings, lineTotal, useCartStore } from '../store/cart';
 import { FLOORS } from '../constants/floors';
 import type { FloorValue } from '../constants/floors';
 import type { AppSettings, ApiResponse, Order } from '../types';
@@ -21,20 +21,17 @@ export default function Checkout() {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [packagingFeePerUnit, setPackagingFeePerUnit] = useState(FALLBACK_PACKAGING_FEE);
-  const [discountPercent, setDiscountPercent] = useState(0);
 
   useEffect(() => {
     api.get<ApiResponse<AppSettings>>('/settings')
-      .then(({ data }) => {
-        setPackagingFeePerUnit(data.data.packagingFee);
-        setDiscountPercent(data.data.discountPercent);
-      })
+      .then(({ data }) => setPackagingFeePerUnit(data.data.packagingFee))
       .catch(() => undefined);
   }, []);
 
   if (items.length === 0) { navigate('/cart'); return null; }
 
-  const subtotal = itemsTotal(discountPercent);
+  const subtotal = itemsTotal();
+  const savings = items.reduce((s, ci) => s + lineSavings(ci), 0);
   const packagingUnits = items.reduce((s, ci) => s + (ci.menuItem.requiresPackaging ? ci.quantity : 0), 0);
   const packagingFee = packagingUnits * packagingFeePerUnit;
   const total = subtotal + DELIVERY_FEE + packagingFee;
@@ -132,15 +129,20 @@ export default function Checkout() {
                         <><br /><span style={{ color: 'var(--gray-400)', fontSize: 12 }}>+ {ci.selectedSides.map(s => s.name).join(', ')}</span></>
                       )}
                     </span>
-                    <span style={{ fontWeight: 600, flexShrink: 0 }}>₦{lineTotal(ci, discountPercent).toLocaleString()}</span>
+                    <span style={{ fontWeight: 600, flexShrink: 0 }}>₦{lineTotal(ci).toLocaleString()}</span>
                   </div>
                 );
               })}
             </div>
             <hr className="divider" style={{ marginBottom: 12 }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--gray-500)', marginBottom: 6 }}>
-              <span>Subtotal{discountPercent > 0 && ` (${discountPercent}% off)`}</span><span>₦{subtotal.toLocaleString()}</span>
+              <span>Subtotal</span><span>₦{subtotal.toLocaleString()}</span>
             </div>
+            {savings > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--primary)', fontWeight: 600, marginBottom: 6 }}>
+                <span>You save</span><span>₦{savings.toLocaleString()}</span>
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--gray-500)', marginBottom: packagingUnits > 0 ? 6 : 12 }}>
               <span>Delivery</span><span>₦{DELIVERY_FEE.toLocaleString()}</span>
             </div>

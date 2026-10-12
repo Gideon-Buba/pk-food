@@ -7,9 +7,16 @@ function sidesKey(sides: Side[]): string {
   return [...sides].map((s) => s.id).sort().join('|');
 }
 
-export function lineTotal(item: CartItem, discountPercent = 0): number {
+export function lineTotal(item: CartItem): number {
   const sidesPrice = item.selectedSides.reduce((sum, s) => sum + s.price, 0);
-  return (applyDiscount(Number(item.menuItem.price), discountPercent) + sidesPrice) * item.quantity;
+  const unit = applyDiscount(Number(item.menuItem.price), item.menuItem.discountPercent ?? 0);
+  return (unit + sidesPrice) * item.quantity;
+}
+
+// How much the line's item discount saves, for "You save" in the cart.
+export function lineSavings(item: CartItem): number {
+  const price = Number(item.menuItem.price);
+  return (price - applyDiscount(price, item.menuItem.discountPercent ?? 0)) * item.quantity;
 }
 
 interface CartStore {
@@ -18,7 +25,7 @@ interface CartStore {
   removeItem: (lineId: string) => void;
   updateQuantity: (lineId: string, quantity: number) => void;
   clearCart: () => void;
-  itemsTotal: (discountPercent?: number) => number;
+  itemsTotal: () => number;
   itemCount: () => number;
 }
 
@@ -68,8 +75,7 @@ export const useCartStore = create<CartStore>()(
 
       clearCart: () => set({ items: [] }),
 
-      itemsTotal: (discountPercent = 0) =>
-        get().items.reduce((sum, item) => sum + lineTotal(item, discountPercent), 0),
+      itemsTotal: () => get().items.reduce((sum, item) => sum + lineTotal(item), 0),
 
       itemCount: () =>
         get().items.reduce((sum, item) => sum + item.quantity, 0),

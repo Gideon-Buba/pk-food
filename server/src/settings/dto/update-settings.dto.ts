@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Matches, Min } from 'class-validator';
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -17,10 +17,4 @@ export class UpdateSettingsDto {
   @Matches(TIME_PATTERN, { message: 'closeTime must be in HH:mm 24h format' })
   @IsOptional()
   closeTime?: string;
-
-  @IsInt()
-  @Min(0)
-  @Max(90)
-  @IsOptional()
-  discountPercent?: number;
 }

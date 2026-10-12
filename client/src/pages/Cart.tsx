@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Trash2, Plus, Minus, ShoppingCart } from 'lucide-react';
 import { api } from '../api/client';
-import { lineTotal, useCartStore } from '../store/cart';
+import { lineSavings, lineTotal, useCartStore } from '../store/cart';
 import type { AppSettings, ApiResponse } from '../types';
 
 const DELIVERY_FEE = Number(import.meta.env.VITE_DELIVERY_FEE ?? 300);
@@ -12,14 +12,10 @@ export default function Cart() {
   const navigate = useNavigate();
   const { items, updateQuantity, removeItem, clearCart, itemsTotal } = useCartStore();
   const [packagingFeePerUnit, setPackagingFeePerUnit] = useState(FALLBACK_PACKAGING_FEE);
-  const [discountPercent, setDiscountPercent] = useState(0);
 
   useEffect(() => {
     api.get<ApiResponse<AppSettings>>('/settings')
-      .then(({ data }) => {
-        setPackagingFeePerUnit(data.data.packagingFee);
-        setDiscountPercent(data.data.discountPercent);
-      })
+      .then(({ data }) => setPackagingFeePerUnit(data.data.packagingFee))
       .catch(() => undefined);
   }, []);
 
@@ -46,7 +42,8 @@ export default function Cart() {
     );
   }
 
-  const subtotal = itemsTotal(discountPercent);
+  const subtotal = itemsTotal();
+  const savings = items.reduce((s, ci) => s + lineSavings(ci), 0);
   const packagingUnits = items.reduce((s, ci) => s + (ci.menuItem.requiresPackaging ? ci.quantity : 0), 0);
   const packagingFee = packagingUnits * packagingFeePerUnit;
   const total = subtotal + DELIVERY_FEE + packagingFee;
@@ -71,7 +68,7 @@ export default function Cart() {
           {/* Items */}
           <div className="card" style={{ overflow: 'hidden' }}>
             {items.map((ci, idx) => {
-              const lineAmount = lineTotal(ci, discountPercent);
+              const lineAmount = lineTotal(ci);
               return (
                 <div key={ci.lineId}>
                   <div style={{ padding: '16px', display: 'flex', gap: 14, alignItems: 'center' }}>
@@ -112,9 +109,15 @@ export default function Cart() {
             <h3 className="section-title" style={{ marginBottom: 16 }}>Order summary</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--gray-600)' }}>
-                <span>Subtotal{discountPercent > 0 && ` (${discountPercent}% off)`}</span>
+                <span>Subtotal</span>
                 <span>₦{subtotal.toLocaleString()}</span>
               </div>
+              {savings > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--primary)', fontWeight: 600 }}>
+                  <span>You save</span>
+                  <span>₦{savings.toLocaleString()}</span>
+                </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--gray-600)' }}>
                 <span>Delivery fee</span>
                 <span>₦{DELIVERY_FEE.toLocaleString()}</span>

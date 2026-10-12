@@ -94,6 +94,10 @@ export default function OrderDetailPanel({
   const sidesSubtotal = order.items.reduce(
     (s, i) => s + i.sides.reduce((ss, side) => ss + Number(side.price), 0) * i.quantity, 0,
   );
+  // Only lines placed after discounts were recorded carry originalUnitPrice.
+  const discountTotal = order.items.reduce(
+    (s, i) => s + (i.originalUnitPrice != null ? (Number(i.originalUnitPrice) - Number(i.unitPrice)) * i.quantity : 0), 0,
+  );
   const deliveryFee = Number(order.deliveryFee);
   const packagingFee = Number(order.packagingFee ?? 0);
   const total = itemsSubtotal + sidesSubtotal + deliveryFee + packagingFee;
@@ -211,6 +215,8 @@ export default function OrderDetailPanel({
               const sidesEach = item.sides.reduce((s, sd) => s + Number(sd.price), 0);
               const lineTotal = (unit + sidesEach) * item.quantity;
               const currentPrice = Number(item.menuItem.price);
+              const originalPrice = item.originalUnitPrice != null ? Number(item.originalUnitPrice) : unit;
+              const discounted = (item.discountPercent ?? 0) > 0 && originalPrice !== unit;
               const category = item.menuItem.category ? CATEGORY_META[item.menuItem.category]?.label : undefined;
               return (
                 <div key={item.id} style={{ display: 'flex', gap: 12, padding: 10, border: '1px solid var(--gray-100)', borderRadius: 'var(--radius-md, 10px)' }}>
@@ -231,7 +237,13 @@ export default function OrderDetailPanel({
                     </div>
                     <div style={{ color: 'var(--gray-500)', fontSize: 12, marginTop: 4 }}>
                       {naira(unit)} each
-                      {currentPrice !== unit && (
+                      {discounted && (
+                        <>
+                          {' '}<span style={{ textDecoration: 'line-through', color: 'var(--gray-400)' }}>{naira(originalPrice)}</span>
+                          {' '}<span className="badge badge-red" style={{ fontSize: 10 }}>-{item.discountPercent}%</span>
+                        </>
+                      )}
+                      {currentPrice !== originalPrice && (
                         <span style={{ color: 'var(--gray-400)' }}> (menu price now {naira(currentPrice)})</span>
                       )}
                     </div>
@@ -250,6 +262,8 @@ export default function OrderDetailPanel({
         </Section>
 
         <Section title="Charges" icon={<Receipt size={13} />}>
+          {discountTotal > 0 && <Row label="Items before discount">{naira(itemsSubtotal + discountTotal)}</Row>}
+          {discountTotal > 0 && <Row label="Discount"><span style={{ color: '#b91c1c' }}>−{naira(discountTotal)}</span></Row>}
           <Row label="Items">{naira(itemsSubtotal)}</Row>
           {sidesSubtotal > 0 && <Row label="Sides">{naira(sidesSubtotal)}</Row>}
           <Row label={`Takeaway packs (${packCount})`}>{naira(packagingFee)}</Row>

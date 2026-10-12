@@ -43,6 +43,8 @@ export interface MenuItem {
   status: ItemStatus;
   category?: FoodCategory | null;
   requiresPackaging: boolean;
+  sideCount?: number;
+  discountPercent?: number;
 }
 
 export interface Side {
@@ -65,7 +67,11 @@ export interface OrderItem {
   menuItem: MenuItem;
   menuItemId: string;
   quantity: number;
+  /** Price charged per unit, after any discount. */
   unitPrice: number;
+  /** Menu price at order time; null on orders placed before discounts were recorded. */
+  originalUnitPrice?: number | null;
+  discountPercent?: number;
   requiresPackaging: boolean;
   sides: OrderItemSide[];
 }
@@ -118,7 +124,6 @@ export interface AppSettings {
   packagingFee: number;
   openTime: string;
   closeTime: string;
-  discountPercent: number;
   isOpen: boolean;
 }
 

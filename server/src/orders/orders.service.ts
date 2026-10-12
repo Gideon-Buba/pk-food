@@ -10,7 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AppSettings, SettingsService } from '../settings/settings.service';
-import { applyDiscount } from '../settings/discount.util';
+import { applyDiscount } from '../menu/discount.util';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { generateOrderReference } from './order-reference.util';
@@ -67,7 +67,7 @@ export class OrdersService {
   }
 
   private async createOrderOnce(user: User, dto: CreateOrderDto, settings: AppSettings): Promise<Order> {
-    const { packagingFee: packagingFeePerUnit, discountPercent } = settings;
+    const { packagingFee: packagingFeePerUnit } = settings;
 
     const order = await this.prisma.$transaction(async (tx) => {
       const menuItemIds = dto.items.map((i) => i.menuItemId);
@@ -140,11 +140,15 @@ export class OrdersService {
           items: {
             create: dto.items.map((orderItem) => {
               const item = menuItems.find((m) => m.id === orderItem.menuItemId)!;
+              const menuPrice = item.price.toNumber();
               return {
                 menuItemId: orderItem.menuItemId,
                 quantity: orderItem.quantity,
-                // Discount is baked into unitPrice, so totals, payments and receipts all see it.
-                unitPrice: applyDiscount(item.price.toNumber(), discountPercent),
+                // unitPrice is what's charged, so totals, payments and receipts all see the discount;
+                // originalUnitPrice + discountPercent keep a record of it.
+                unitPrice: applyDiscount(menuPrice, item.discountPercent),
+                originalUnitPrice: menuPrice,
+                discountPercent: item.discountPercent,
                 requiresPackaging: item.requiresPackaging,
                 sides: {
                   create: (orderItem.sideIds ?? []).map((sideId) => {

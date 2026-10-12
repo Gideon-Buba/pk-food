@@ -1,14 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Menu, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp, ImagePlus, X, LayoutGrid, LayoutList, Search, Truck, LogOut, ChevronDown, ListPlus, Clock, Percent, Settings } from 'lucide-react';
+import { Menu, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp, ImagePlus, X, LayoutGrid, LayoutList, Search, Truck, LogOut, ChevronDown, ListPlus, Clock, Settings } from 'lucide-react';
 import QueuePanel from '../components/QueuePanel';
 import OrderDetailPanel from '../components/OrderDetailPanel';
+import RevenuePanel from '../components/RevenuePanel';
 import { FLOORS } from '../constants/floors';
 import toast from 'react-hot-toast';
 import { api, clearToken } from '../api/client';
 import type { ApiResponse, AppSettings, FoodCategory, MenuItem, Order, OrderStatus, Side, User, Vendor } from '../types';
 import { CATEGORY_META, CATEGORY_ORDER } from '../constants/categories';
-import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { applyDiscount } from '../lib/utils';
+
+// Shows what customers will actually pay under the discount field.
+function DiscountHint({ price, discountPercent }: { price: number; discountPercent: number }) {
+  if (discountPercent <= 0 || price <= 0) {
+    return <p style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 4 }}>0 = no discount</p>;
+  }
+  return (
+    <p style={{ fontSize: 11, color: 'var(--primary)', marginTop: 4, fontWeight: 600 }}>
+      Customers pay ₦{applyDiscount(price, discountPercent).toLocaleString()} instead of ₦{price.toLocaleString()}
+    </p>
+  );
+}
 
 interface ImageUploaderProps {
   value: string;
@@ -134,7 +147,7 @@ export default function AdminDashboard() {
   const [editingVendorId, setEditingVendorId] = useState<string | null>(null);
   const [editingVendorName, setEditingVendorName] = useState('');
   const [showAddItem, setShowAddItem] = useState(false);
-  const [newItem, setNewItem] = useState({ name: '', price: '', vendorId: '', totalStock: '50', onlineStock: '50', image: '', category: '' as FoodCategory | '', requiresPackaging: false });
+  const [newItem, setNewItem] = useState({ name: '', price: '', vendorId: '', totalStock: '50', onlineStock: '50', image: '', category: '' as FoodCategory | '', requiresPackaging: false, discountPercent: '0' });
   const [addingItem, setAddingItem] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [itemSideIds, setItemSideIds] = useState<Set<string>>(new Set());
@@ -149,8 +162,6 @@ export default function AdminDashboard() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [packagingFeeInput, setPackagingFeeInput] = useState('');
   const [savingPackagingFee, setSavingPackagingFee] = useState(false);
-  const [discountInput, setDiscountInput] = useState('');
-  const [savingDiscount, setSavingDiscount] = useState(false);
   const [openTimeInput, setOpenTimeInput] = useState('');
   const [closeTimeInput, setCloseTimeInput] = useState('');
   const [savingHours, setSavingHours] = useState(false);
@@ -203,7 +214,6 @@ export default function AdminDashboard() {
         setAnnouncements(a.data.data);
         setSettings(s.data.data);
         setPackagingFeeInput(String(s.data.data.packagingFee));
-        setDiscountInput(String(s.data.data.discountPercent));
         setOpenTimeInput(s.data.data.openTime);
         setCloseTimeInput(s.data.data.closeTime);
         setSides(sd.data.data);
@@ -382,6 +392,7 @@ export default function AdminDashboard() {
         vendorId: editingItem.vendorId,
         category: editingItem.category ?? undefined,
         requiresPackaging: editingItem.requiresPackaging,
+        discountPercent: editingItem.discountPercent ?? 0,
       });
       await api.patch(`/menu/items/${editingItem.id}/sides`, { sideIds: [...itemSideIds] });
       setMenuItems(prev => prev.map(m => m.id === editingItem.id ? { ...m, ...editingItem } : m));
@@ -403,8 +414,9 @@ export default function AdminDashboard() {
         image: newItem.image || undefined,
         category: newItem.category || undefined,
         requiresPackaging: newItem.requiresPackaging,
+        discountPercent: parseInt(newItem.discountPercent, 10) || 0,
       });
-      setNewItem({ name: '', price: '', vendorId: '', totalStock: '50', onlineStock: '50', image: '', category: '', requiresPackaging: false });
+      setNewItem({ name: '', price: '', vendorId: '', totalStock: '50', onlineStock: '50', image: '', category: '', requiresPackaging: false, discountPercent: '0' });
       setShowAddItem(false);
       load();
       toast.success('Menu item added');
@@ -423,19 +435,6 @@ export default function AdminDashboard() {
       toast.success('Packaging fee updated — past orders keep their original charge');
     } catch { toast.error('Failed to update packaging fee'); }
     finally { setSavingPackagingFee(false); }
-  };
-
-  const handleSaveDiscount = async (value: string) => {
-    const pct = parseInt(value, 10);
-    if (isNaN(pct) || pct < 0 || pct > 90) { toast.error('Enter a discount between 0 and 90%'); return; }
-    setSavingDiscount(true);
-    try {
-      const res = await api.patch<ApiResponse<AppSettings>>('/settings', { discountPercent: pct });
-      setSettings(res.data.data);
-      setDiscountInput(String(res.data.data.discountPercent));
-      toast.success(pct === 0 ? 'Discount turned off' : `${pct}% off applied to all menu items`);
-    } catch { toast.error('Failed to update discount'); }
-    finally { setSavingDiscount(false); }
   };
 
   const handleSaveHours = async () => {
@@ -490,67 +489,6 @@ export default function AdminDashboard() {
   };
 
   const orderTotal = (o: Order) => Number(o.deliveryFee) + Number(o.packagingFee ?? 0) + o.items.reduce((s, i) => s + (Number(i.unitPrice) + i.sides.reduce((ss, sd) => ss + Number(sd.price), 0)) * i.quantity, 0);
-
-  const today = new Date().toDateString();
-  const paidOrders   = orders.filter(o => o.paid);
-  const todayOrders  = orders.filter(o => new Date(o.createdAt).toDateString() === today);
-  const todayPaid    = todayOrders.filter(o => o.paid);
-  const pending      = orders.filter(o => o.status === 'PENDING').length;
-  const active       = orders.filter(o => ['CONFIRMED','PREPARING','READY','IN_TRANSIT'].includes(o.status)).length;
-  const delivered    = orders.filter(o => o.status === 'DELIVERED').length;
-  const cancelled    = orders.filter(o => o.status === 'CANCELLED').length;
-  const revenue      = paidOrders.reduce((s, o) => s + orderTotal(o), 0);
-  const revenueToday = todayPaid.reduce((s, o) => s + orderTotal(o), 0);
-  const avgOrder     = paidOrders.length ? Math.round(revenue / paidOrders.length) : 0;
-
-  // Top items by units sold
-  const itemSales = new Map<string, { name: string; vendorName: string; qty: number; revenue: number }>();
-  orders.forEach(o => {
-    o.items.forEach(i => {
-      const prev = itemSales.get(i.menuItem.id) ?? { name: i.menuItem.name, vendorName: i.menuItem.vendor?.name ?? '—', qty: 0, revenue: 0 };
-      itemSales.set(i.menuItem.id, {
-        name: i.menuItem.name,
-        vendorName: prev.vendorName,
-        qty: prev.qty + i.quantity,
-        revenue: prev.revenue + (o.paid ? Number(i.unitPrice) * i.quantity : 0),
-      });
-    });
-  });
-  const topItems = [...itemSales.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 5);
-
-  // Vendor performance
-  const vendorStats = new Map<string, { name: string; orders: number; revenue: number; qty: number }>();
-  orders.forEach(o => {
-    o.items.forEach(i => {
-      const vid = i.menuItem.vendorId ?? i.menuItem.vendor?.name ?? '?';
-      const vname = i.menuItem.vendor?.name ?? '?';
-      const prev = vendorStats.get(vid) ?? { name: vname, orders: 0, revenue: 0, qty: 0 };
-      vendorStats.set(vid, {
-        name: vname,
-        orders: prev.orders + 1,
-        revenue: prev.revenue + (o.paid ? Number(i.unitPrice) * i.quantity : 0),
-        qty: prev.qty + i.quantity,
-      });
-    });
-  });
-  const vendorList = [...vendorStats.values()].sort((a, b) => b.revenue - a.revenue);
-
-  // Last 7 days revenue
-  const last7 = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - (6 - i));
-    const ds = d.toDateString();
-    const dayOrders = paidOrders.filter(o => new Date(o.createdAt).toDateString() === ds);
-    return { label: d.toLocaleDateString('en-NG', { weekday: 'short' }), value: dayOrders.reduce((s, o) => s + orderTotal(o), 0) };
-  });
-
-  const statusPieData = [
-    { name: 'Delivered', value: delivered, color: '#16a34a' },
-    { name: 'Active',    value: active,    color: '#3b82f6' },
-    { name: 'Pending',   value: pending,   color: '#f59e0b' },
-    { name: 'Cancelled', value: cancelled, color: '#ef4444' },
-  ].filter(d => d.value > 0);
-
-  const VENDOR_COLORS = ['#2d6a4f', '#40916c', '#52b788', '#74c69d', '#95d5b2', '#b7e4c7'];
 
   const filteredMenuItems = menuItems.filter(item => {
     if (menuSearch && !item.name.toLowerCase().includes(menuSearch.toLowerCase())) return false;
@@ -985,166 +923,8 @@ export default function AdminDashboard() {
             )}
 
             {/* Revenue tab */}
-            {tab === 'revenue' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+            {tab === 'revenue' && <RevenuePanel orders={orders} menuItems={menuItems} vendors={vendors} />}
 
-                {/* KPI cards */}
-                <div className="admin-four-col" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
-                  {[
-                    { label: 'Total revenue',  value: `₦${revenue.toLocaleString()}`,       sub: `from ${paidOrders.length} paid orders`, color: '#2d6a4f', bg: '#f0faf5' },
-                    { label: "Today's revenue", value: `₦${revenueToday.toLocaleString()}`,  sub: `${todayOrders.length} orders today`,    color: '#16a34a', bg: '#f0fdf4' },
-                    { label: 'Avg order value', value: `₦${avgOrder.toLocaleString()}`,      sub: 'across paid orders',                    color: '#3b82f6', bg: '#eff6ff' },
-                    { label: 'Payment rate',    value: orders.length ? `${Math.round((paidOrders.length / orders.length) * 100)}%` : '—', sub: `${orders.length - paidOrders.length} unpaid`, color: '#f59e0b', bg: '#fffbeb' },
-                  ].map(c => (
-                    <div key={c.label} style={{ padding: '18px 20px', borderRadius: 'var(--radius-lg)', background: c.bg, border: `1px solid ${c.color}22` }}>
-                      <p style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>{c.label}</p>
-                      <p style={{ fontSize: 24, fontWeight: 800, color: c.color, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 6 }}>{c.value}</p>
-                      <p style={{ fontSize: 11, color: '#9ca3af' }}>{c.sub}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {/* 7-day revenue area chart */}
-                <div>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 16 }}>Revenue — last 7 days</p>
-                  <ResponsiveContainer width="100%" height={230}>
-                    <AreaChart data={last7} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#2d6a4f" stopOpacity={0.25} />
-                          <stop offset="95%" stopColor="#2d6a4f" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-                      <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} />
-                      <YAxis
-                        axisLine={false} tickLine={false}
-                        tick={{ fontSize: 11, fill: '#9ca3af' }}
-                        tickFormatter={v => v >= 1000 ? `₦${(v / 1000).toFixed(0)}k` : `₦${v}`}
-                        width={58}
-                      />
-                      <Tooltip
-                        formatter={(v: unknown) => [`₦${Number(v).toLocaleString()}`, 'Revenue']}
-                        contentStyle={{ borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 13, boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}
-                        cursor={{ stroke: '#2d6a4f', strokeWidth: 1, strokeDasharray: '4 4' }}
-                      />
-                      <Area
-                        type="monotone" dataKey="value" stroke="#2d6a4f" strokeWidth={2.5}
-                        fill="url(#revGrad)"
-                        dot={{ fill: '#2d6a4f', r: 4, strokeWidth: 0 }}
-                        activeDot={{ r: 6, fill: '#2d6a4f', stroke: '#fff', strokeWidth: 2 }}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* Vendor bar + Status donut side by side */}
-                <div className="admin-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 28 }}>
-
-                  {/* Vendor revenue - horizontal bar chart */}
-                  <div>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 16 }}>Revenue by vendor</p>
-                    {vendorList.length === 0 ? (
-                      <p style={{ fontSize: 13, color: '#9ca3af' }}>No orders yet</p>
-                    ) : (
-                      <ResponsiveContainer width="100%" height={Math.max(vendorList.length * 44 + 16, 120)}>
-                        <BarChart data={vendorList} layout="vertical" margin={{ top: 0, right: 12, left: 0, bottom: 0 }}>
-                          <XAxis
-                            type="number" axisLine={false} tickLine={false}
-                            tick={{ fontSize: 11, fill: '#9ca3af' }}
-                            tickFormatter={v => `₦${(v / 1000).toFixed(0)}k`}
-                          />
-                          <YAxis
-                            type="category" dataKey="name" axisLine={false} tickLine={false}
-                            tick={{ fontSize: 12, fill: '#374151' }} width={88}
-                          />
-                          <Tooltip
-                            formatter={(v: unknown) => [`₦${Number(v).toLocaleString()}`, 'Revenue']}
-                            contentStyle={{ borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 13, boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}
-                            cursor={{ fill: 'rgba(45,106,79,0.06)' }}
-                          />
-                          <Bar dataKey="revenue" radius={[0, 6, 6, 0]} barSize={20}>
-                            {vendorList.map((_, i) => (
-                              <Cell key={i} fill={VENDOR_COLORS[i % VENDOR_COLORS.length]} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                  </div>
-
-                  {/* Order status donut */}
-                  <div>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 16 }}>Orders by status</p>
-                    {statusPieData.length === 0 ? (
-                      <p style={{ fontSize: 13, color: '#9ca3af' }}>No orders yet</p>
-                    ) : (
-                      <ResponsiveContainer width="100%" height={200}>
-                        <PieChart>
-                          <Pie
-                            data={statusPieData} cx="50%" cy="50%"
-                            innerRadius={52} outerRadius={80}
-                            paddingAngle={3} dataKey="value" nameKey="name"
-                            strokeWidth={0}
-                          >
-                            {statusPieData.map((entry, i) => (
-                              <Cell key={i} fill={entry.color} />
-                            ))}
-                          </Pie>
-                          <Tooltip
-                            formatter={(v: unknown, name: unknown) => [String(v), String(name)] as [string, string]}
-                            contentStyle={{ borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 13, boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}
-                          />
-                          <Legend
-                            iconType="circle" iconSize={8}
-                            formatter={(value: string) => <span style={{ fontSize: 12, color: '#374151' }}>{value}</span>}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    )}
-                  </div>
-
-                </div>
-
-                {/* Top items table */}
-                <div>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 14 }}>Top items by revenue</p>
-                  {topItems.length === 0 ? (
-                    <p style={{ fontSize: 13, color: '#9ca3af' }}>No orders yet</p>
-                  ) : (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th style={{ width: 32 }}>#</th>
-                            <th>Item</th>
-                            <th>Vendor</th>
-                            <th>Units sold</th>
-                            <th>Revenue</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {topItems.map((item, i) => (
-                            <tr key={item.name}>
-                              <td>
-                                <span style={{ fontWeight: 800, color: i === 0 ? '#2d6a4f' : '#d1d5db', fontSize: 13 }}>#{i + 1}</span>
-                              </td>
-                              <td style={{ fontWeight: 600 }}>{item.name}</td>
-                              <td style={{ color: '#6b7280', fontSize: 13 }}>{item.vendorName}</td>
-                              <td style={{ color: '#374151' }}>{item.qty}</td>
-                              <td style={{ fontWeight: 700, color: '#2d6a4f' }}>₦{item.revenue.toLocaleString()}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-
-              </div>
-            )}
-
-            {/* Menu tab */}
             {tab === 'menu' && (
               <div>
                 {/* Menu toolbar */}
@@ -1263,6 +1043,11 @@ export default function AdminDashboard() {
                         <input className="input" type="number" placeholder="0" value={newItem.price} onChange={e => setNewItem({ ...newItem, price: e.target.value })} required />
                       </div>
                       <div className="form-group">
+                        <label className="label">Discount (%)</label>
+                        <input className="input" type="number" min={0} max={90} value={newItem.discountPercent} onChange={e => setNewItem({ ...newItem, discountPercent: e.target.value })} />
+                        <DiscountHint price={parseFloat(newItem.price) || 0} discountPercent={parseInt(newItem.discountPercent, 10) || 0} />
+                      </div>
+                      <div className="form-group">
                         <label className="label">Vendor</label>
                         <select className="input" value={newItem.vendorId} onChange={e => setNewItem({ ...newItem, vendorId: e.target.value })} required style={{ cursor: 'pointer' }}>
                           <option value="">Select vendor</option>
@@ -1334,6 +1119,11 @@ export default function AdminDashboard() {
                         <div className="form-group">
                           <label className="label">Price (₦)</label>
                           <input className="input" type="number" value={editingItem.price} onChange={e => setEditingItem({ ...editingItem, price: Number(e.target.value) })} required />
+                        </div>
+                        <div className="form-group">
+                          <label className="label">Discount (%)</label>
+                          <input className="input" type="number" min={0} max={90} value={editingItem.discountPercent ?? 0} onChange={e => setEditingItem({ ...editingItem, discountPercent: Math.min(90, Math.max(0, parseInt(e.target.value, 10) || 0)) })} />
+                          <DiscountHint price={Number(editingItem.price)} discountPercent={editingItem.discountPercent ?? 0} />
                         </div>
                         <div className="form-group">
                           <label className="label">Vendor</label>
@@ -1436,6 +1226,9 @@ export default function AdminDashboard() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                               <p style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</p>
                               <span className={`badge ${item.status === 'AVAILABLE' ? 'badge-green' : 'badge-red'}`} style={{ fontSize: 10, flexShrink: 0 }}>{item.status === 'AVAILABLE' ? 'Live' : 'Off'}</span>
+                              {(item.discountPercent ?? 0) > 0 && (
+                                <span className="badge badge-red" style={{ fontSize: 10, flexShrink: 0 }} title="Discounted">-{item.discountPercent}%</span>
+                              )}
                               {item.requiresPackaging && (
                                 <span className="badge" style={{ fontSize: 10, flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--gray-600)', background: 'var(--gray-100)' }} title="Requires a takeaway pack">
                                   <Package size={10} /> Pack
@@ -1493,6 +1286,9 @@ export default function AdminDashboard() {
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 6 }}>
                             <span style={{ fontWeight: 800, color: 'var(--primary)', fontSize: 14 }}>₦{Number(item.price).toLocaleString()}</span>
                             <span style={{ display: 'flex', gap: 4 }}>
+                              {(item.discountPercent ?? 0) > 0 && (
+                                <span className="badge badge-red" style={{ fontSize: 10, flexShrink: 0 }} title="Discounted">-{item.discountPercent}%</span>
+                              )}
                               {item.requiresPackaging && (
                                 <span className="badge" style={{ fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--gray-600)', background: 'var(--gray-100)' }} title="Requires a takeaway pack">
                                   <Package size={10} /> Pack
@@ -1686,50 +1482,6 @@ export default function AdminDashboard() {
                   </button>
                   <p style={{ fontSize: 11, color: 'var(--gray-400)', width: '100%', margin: 0 }}>
                     Charged once per pack on items marked "Requires takeaway pack" below. Changing this only affects orders placed after the change — past orders keep the fee they were charged at the time.
-                  </p>
-                </div>
-
-                {/* Store-wide discount */}
-                <div className="card" style={{ padding: 16, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                    <Percent size={16} color="var(--gray-500)" />
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>Discount on all items</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <input
-                      className="input"
-                      type="number"
-                      min={0}
-                      max={90}
-                      value={discountInput}
-                      onChange={e => setDiscountInput(e.target.value)}
-                      style={{ width: 90 }}
-                    />
-                    <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>% off</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    disabled={savingDiscount || discountInput === String(settings?.discountPercent ?? '')}
-                    onClick={() => handleSaveDiscount(discountInput)}
-                  >
-                    {savingDiscount ? <span className="spinner" style={{ width: 13, height: 13 }} /> : 'Save'}
-                  </button>
-                  {(settings?.discountPercent ?? 0) > 0 && (
-                    <>
-                      <span className="badge badge-green">{settings?.discountPercent}% off live</span>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        disabled={savingDiscount}
-                        onClick={() => handleSaveDiscount('0')}
-                      >
-                        Turn off
-                      </button>
-                    </>
-                  )}
-                  <p style={{ fontSize: 11, color: 'var(--gray-400)', width: '100%', margin: 0 }}>
-                    Takes this percentage off every menu item's price. Sides, delivery and pack fees aren't discounted. Your saved prices don't change, so set it back to 0 to end the promo. Past orders keep the price they were charged.
                   </p>
                 </div>
               </div>

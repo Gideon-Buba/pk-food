@@ -183,8 +183,6 @@ h1, h2, h3, h4, h5, h6 {
 .empty-state p { font-size: 14px; color: var(--gray-400); }
 
 /* ── Carousel nav ── */
-.carousel-nav-btn { background: none; border: none; cursor: pointer; color: #92400e; display: flex; align-items: center; justify-content: center; padding: 5px; border-radius: var(--radius-sm); opacity: 0.7; transition: opacity 0.15s, background 0.15s; }
-.carousel-nav-btn:hover { opacity: 1; background: rgba(0,0,0,.06); }
 
 /* ── Announcement banner ── */
 .announcement {

@@ -21,6 +21,7 @@ function mockMenuItem(overrides: Record<string, unknown> = {}) {
     onlineStock: 10,
     totalStock: 10,
     vendorId: 'vendor-1',
+    discountPercent: 0,
     ...overrides,
   };
 }
@@ -67,7 +68,7 @@ describe('OrdersService', () => {
 
   const mockConfig = { deliveryFee: 300 };
   const mockSettings = {
-    get: jest.fn().mockResolvedValue({ packagingFee: 50, openTime: '08:00', closeTime: '20:00', discountPercent: 0, isOpen: true }),
+    get: jest.fn().mockResolvedValue({ packagingFee: 50, openTime: '08:00', closeTime: '20:00', isOpen: true }),
   };
 
   beforeEach(async () => {
@@ -119,7 +120,7 @@ describe('OrdersService', () => {
     const actor = mockUser();
 
     it('throws BadRequestException when the store is closed', async () => {
-      mockSettings.get.mockResolvedValueOnce({ packagingFee: 50, openTime: '08:00', closeTime: '20:00', discountPercent: 0, isOpen: false });
+      mockSettings.get.mockResolvedValueOnce({ packagingFee: 50, openTime: '08:00', closeTime: '20:00', isOpen: false });
 
       await expect(service.createOrder(actor as never, dto)).rejects.toThrow(BadRequestException);
     });
@@ -165,29 +166,26 @@ describe('OrdersService', () => {
       expect(createArg.data.reference).toMatch(/^PK[0-9A-HJKMNP-TV-Z]{5}$/);
     });
 
-    it('stores the undiscounted price when there is no discount', async () => {
-      prisma.menuItem.findMany.mockResolvedValue([mockMenuItem()]);
+    type CreatedItems = { data: { items: { create: { unitPrice: number; originalUnitPrice: number; discountPercent: number }[] } } };
+
+    it('charges the full price and records no discount when the item has none', async () => {
+      prisma.menuItem.findMany.mockResolvedValue([mockMenuItem({ discountPercent: 0 })]);
       prisma.order.create.mockResolvedValue(mockOrder());
 
       await service.createOrder(actor as never, dto);
 
-      const createArg = prisma.order.create.mock.calls[0][0] as {
-        data: { items: { create: { unitPrice: number }[] } };
-      };
-      expect(createArg.data.items.create[0].unitPrice).toBe(1500);
+      const line = (prisma.order.create.mock.calls[0][0] as CreatedItems).data.items.create[0];
+      expect(line).toMatchObject({ unitPrice: 1500, originalUnitPrice: 1500, discountPercent: 0 });
     });
 
-    it('applies the store-wide discount to the stored unit price', async () => {
-      mockSettings.get.mockResolvedValueOnce({ packagingFee: 50, openTime: '08:00', closeTime: '20:00', discountPercent: 15, isOpen: true });
-      prisma.menuItem.findMany.mockResolvedValue([mockMenuItem()]);
+    it("charges the item's discounted price and records the original price and %", async () => {
+      prisma.menuItem.findMany.mockResolvedValue([mockMenuItem({ discountPercent: 15 })]);
       prisma.order.create.mockResolvedValue(mockOrder());
 
       await service.createOrder(actor as never, dto);
 
-      const createArg = prisma.order.create.mock.calls[0][0] as {
-        data: { items: { create: { unitPrice: number }[] } };
-      };
-      expect(createArg.data.items.create[0].unitPrice).toBe(1275); // 1500 - 15%
+      const line = (prisma.order.create.mock.calls[0][0] as CreatedItems).data.items.create[0];
+      expect(line).toMatchObject({ unitPrice: 1275, originalUnitPrice: 1500, discountPercent: 15 }); // 1500 - 15%
     });
 
     it('sets status to OUT_OF_STOCK when last unit is taken', async () => {

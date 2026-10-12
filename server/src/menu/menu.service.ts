@@ -8,12 +8,19 @@ import { CreateAnnouncementDto } from './dto/create-announcement.dto';
 import { CreateSideDto } from './dto/create-side.dto';
 import { UpdateSideDto } from './dto/update-side.dto';
 
-type MenuItemWithVendor = MenuItem & { vendor: Vendor; category: FoodCategory | null };
-type SerializedMenuItem = Omit<MenuItemWithVendor, 'price'> & { price: number };
+const itemInclude = { vendor: true, _count: { select: { sides: true } } } as const;
+
+type MenuItemWithVendor = MenuItem & {
+  vendor: Vendor;
+  category: FoodCategory | null;
+  _count: { sides: number };
+};
+// sideCount lets the client skip the sides picker for items that offer none.
+type SerializedMenuItem = Omit<MenuItemWithVendor, 'price' | '_count'> & { price: number; sideCount: number };
 
 function serializeItem(item: MenuItemWithVendor): SerializedMenuItem {
-  const { price, ...rest } = item;
-  return { ...rest, price: price.toNumber() };
+  const { price, _count, ...rest } = item;
+  return { ...rest, price: price.toNumber(), sideCount: _count.sides };
 }
 
 type SerializedSide = Omit<Side, 'price'> & { price: number };
@@ -30,7 +37,7 @@ export class MenuService {
   async findAllItems(onlyAvailable = false): Promise<SerializedMenuItem[]> {
     const items = await this.prisma.menuItem.findMany({
       where: onlyAvailable ? { status: ItemStatus.AVAILABLE } : undefined,
-      include: { vendor: true },
+      include: itemInclude,
       orderBy: { createdAt: 'desc' },
     });
     return items.map(serializeItem);
@@ -39,7 +46,7 @@ export class MenuService {
   async findOneItem(id: string): Promise<SerializedMenuItem> {
     const item = await this.prisma.menuItem.findUnique({
       where: { id },
-      include: { vendor: true },
+      include: itemInclude,
     });
     if (!item) throw new NotFoundException('Menu item not found');
     return serializeItem(item);
@@ -62,8 +69,9 @@ export class MenuService {
         status: dto.status ?? ItemStatus.AVAILABLE,
         category: dto.category ?? null,
         requiresPackaging: dto.requiresPackaging ?? false,
+        discountPercent: dto.discountPercent ?? 0,
       },
-      include: { vendor: true },
+      include: itemInclude,
     });
     return serializeItem(item);
   }
@@ -86,8 +94,9 @@ export class MenuService {
         ...(dto.status !== undefined && { status: dto.status }),
         ...(dto.category !== undefined && { category: dto.category }),
         ...(dto.requiresPackaging !== undefined && { requiresPackaging: dto.requiresPackaging }),
+        ...(dto.discountPercent !== undefined && { discountPercent: dto.discountPercent }),
       },
-      include: { vendor: true },
+      include: itemInclude,
     });
     return serializeItem(item);
   }
