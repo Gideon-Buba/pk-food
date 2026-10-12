@@ -9,8 +9,7 @@ import {
   Plus,
   Minus,
   X,
-  ChevronLeft,
-  ChevronRight,
+  Megaphone,
   Settings,
   UtensilsCrossed,
   User,
@@ -19,6 +18,7 @@ import {
 import toast from "react-hot-toast";
 import { api, clearToken, getToken } from "../api/client";
 import { useCartStore } from "../store/cart";
+import { applyDiscount } from "../lib/utils";
 import { CATEGORY_META, CATEGORY_ORDER } from "../constants/categories";
 import type {
   ApiResponse,
@@ -30,6 +30,30 @@ import type {
   MenuItem,
   Side,
 } from "../types";
+
+function PriceTag({ price, discountPercent }: { price: number; discountPercent: number }) {
+  const discounted = applyDiscount(price, discountPercent);
+  return (
+    <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6, whiteSpace: "nowrap" }}>
+      <span
+        style={{
+          fontSize: 17,
+          fontWeight: 800,
+          color: "var(--primary)",
+          fontFamily: "var(--font-display)",
+          letterSpacing: "-0.02em",
+        }}
+      >
+        &#8358;{discounted.toLocaleString()}
+      </span>
+      {discounted !== price && (
+        <span style={{ fontSize: 12, color: "var(--gray-400)", textDecoration: "line-through" }}>
+          &#8358;{price.toLocaleString()}
+        </span>
+      )}
+    </span>
+  );
+}
 
 interface ItemCardProps {
   item: MenuItem;
@@ -122,6 +146,24 @@ function ItemCard({ item, index, totalQty, simpleLine, onAdd, onUpdate }: ItemCa
         >
           {item.vendor.name}
         </div>
+        {(item.discountPercent ?? 0) > 0 && (
+          <div
+            style={{
+              position: "absolute",
+              top: 8,
+              left: 8,
+              background: "#b91c1c",
+              color: "#fff",
+              borderRadius: 20,
+              padding: "3px 9px",
+              fontSize: 11,
+              fontWeight: 800,
+              fontFamily: "var(--font-ui)",
+            }}
+          >
+            -{item.discountPercent}%
+          </div>
+        )}
         {totalQty > 0 && (
           <div
             style={{
@@ -196,17 +238,7 @@ function ItemCard({ item, index, totalQty, simpleLine, onAdd, onUpdate }: ItemCa
             marginTop: "auto",
           }}
         >
-          <span
-            style={{
-              fontSize: 17,
-              fontWeight: 800,
-              color: "var(--primary)",
-              fontFamily: "var(--font-display)",
-              letterSpacing: "-0.02em",
-            }}
-          >
-            &#8358;{Number(item.price).toLocaleString()}
-          </span>
+          <PriceTag price={Number(item.price)} discountPercent={item.discountPercent ?? 0} />
           {simpleLine ? (
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <button
@@ -295,7 +327,7 @@ function SidePickerModal({ item, sides, onClose, onConfirm }: SidePickerModalPro
   const sidesTotal = (sides ?? [])
     .filter((s) => selected.has(s.id))
     .reduce((sum, s) => sum + s.price, 0);
-  const total = item.price + sidesTotal;
+  const total = applyDiscount(Number(item.price), item.discountPercent ?? 0) + sidesTotal;
 
   return (
     <div
@@ -387,18 +419,7 @@ function SidePickerModal({ item, sides, onClose, onConfirm }: SidePickerModalPro
           <div style={{ padding: "16px 20px 4px" }}>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 4 }}>
               <p style={{ fontWeight: 700, fontSize: 18, margin: 0, lineHeight: 1.3 }}>{item.name}</p>
-              <span
-                style={{
-                  fontSize: 17,
-                  fontWeight: 800,
-                  color: "var(--primary)",
-                  fontFamily: "var(--font-display)",
-                  letterSpacing: "-0.02em",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                &#8358;{item.price.toLocaleString()}
-              </span>
+              <PriceTag price={Number(item.price)} discountPercent={item.discountPercent ?? 0} />
             </div>
 
             <p style={{ fontSize: 13, color: "var(--gray-500)", marginTop: 12, marginBottom: 10, fontWeight: 600 }}>
@@ -848,6 +869,13 @@ export default function Menu() {
   }
 
   const handleAdd = (item: MenuItem) => {
+    // No sides offered: straight into the cart, no sheet.
+    if (item.sideCount === 0) {
+      addItem(item);
+      toast.success(`Added to cart`, { id: item.id, duration: 1000 });
+      return;
+    }
+
     // Open the sheet immediately with a skeleton — don't block on the network first.
     activeSidePickerItemId.current = item.id;
     setSidePicker({ item, sides: null });
@@ -887,33 +915,12 @@ export default function Menu() {
   // Announcements
   const notices = announcements.filter((a) => a.type === "GENERAL");
   const statuses = announcements.filter((a) => a.type === "STATUS");
-  const [noticeIdx, setNoticeIdx] = useState(0);
   const [dismissedStatuses, setDismissedStatuses] = useState<Set<string>>(
     new Set(),
   );
-  const carouselTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    if (notices.length < 2) return;
-    carouselTimer.current = setInterval(
-      () => setNoticeIdx((i) => (i + 1) % notices.length),
-      4500,
-    );
-    return () => {
-      if (carouselTimer.current) clearInterval(carouselTimer.current);
-    };
-  }, [notices.length]);
-
-  const prevNotice = () => {
-    if (carouselTimer.current) clearInterval(carouselTimer.current);
-    setNoticeIdx((i) => (i - 1 + notices.length) % notices.length);
-  };
-  const nextNotice = () => {
-    if (carouselTimer.current) clearInterval(carouselTimer.current);
-    setNoticeIdx((i) => (i + 1) % notices.length);
-  };
 
   const visibleStatuses = statuses.filter((s) => !dismissedStatuses.has(s.id));
+  const visibleNotices = notices.filter((n) => !dismissedStatuses.has(n.id));
 
   // Initials for avatar
   const initials = userName ? userName[0].toUpperCase() : "?";
@@ -1304,115 +1311,61 @@ export default function Menu() {
           </div>
         )}
 
-        {/* ── Notice carousel ─────────────────────────────── */}
-        {notices.length > 0 && (
-          <div
-            style={{
-              marginBottom: 16,
-              background: "#fffbeb",
-              border: "1px solid #fde68a",
-              borderRadius: "var(--radius-md)",
-              overflow: "hidden",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center" }}>
+        {/* ── Notices ─────────────────────────────────────── */}
+        {visibleNotices.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+            {visibleNotices.map((n) => (
               <div
+                key={n.id}
+                role="note"
                 style={{
                   display: "flex",
-                  alignItems: "center",
-                  alignSelf: "stretch",
-                  flexShrink: 0,
-                  borderRight: "1px solid #fde68a",
+                  alignItems: "flex-start",
+                  gap: 14,
+                  padding: "14px 14px 14px 16px",
+                  background: "#fff",
+                  border: "1px solid var(--gray-100)",
+                  borderRadius: 14,
+                  boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
                 }}
               >
                 <div
                   style={{
-                    width: 3,
-                    alignSelf: "stretch",
-                    background: "var(--amber)",
-                  }}
-                />
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    color: "#92400e",
-                    fontFamily: "var(--font-ui)",
-                    padding: "0 10px",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Notice
-                </span>
-              </div>
-              <div style={{ flex: 1, overflow: "hidden", minWidth: 0 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    width: `${notices.length * 100}%`,
-                    transform: `translateX(-${noticeIdx * (100 / notices.length)}%)`,
-                    transition: "transform 0.4s cubic-bezier(0.4,0,0.2,1)",
-                  }}
-                >
-                  {notices.map((n) => (
-                    <div
-                      key={n.id}
-                      style={{
-                        width: `${100 / notices.length}%`,
-                        padding: "10px 14px",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <p
-                        style={{
-                          fontSize: 13,
-                          color: "#78350f",
-                          lineHeight: 1.5,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
-                        {n.message}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              {notices.length > 1 && (
-                <div
-                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: "50%",
+                    background: "var(--primary-subtle)",
                     display: "flex",
                     alignItems: "center",
-                    gap: 2,
-                    padding: "0 8px",
+                    justifyContent: "center",
                     flexShrink: 0,
-                    borderLeft: "1px solid #fde68a",
                   }}
                 >
-                  <button onClick={prevNotice} className="carousel-nav-btn">
-                    <ChevronLeft size={14} />
-                  </button>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: "#92400e",
-                      fontWeight: 600,
-                      minWidth: 28,
-                      textAlign: "center",
-                      fontFamily: "var(--font-ui)",
-                    }}
-                  >
-                    {noticeIdx + 1}/{notices.length}
-                  </span>
-                  <button onClick={nextNotice} className="carousel-nav-btn">
-                    <ChevronRight size={14} />
-                  </button>
+                  <Megaphone size={16} color="var(--primary)" />
                 </div>
-              )}
-            </div>
+                <p
+                  style={{
+                    flex: 1,
+                    margin: 0,
+                    paddingTop: 7,
+                    fontSize: 14,
+                    lineHeight: 1.55,
+                    color: "var(--gray-700)",
+                    overflowWrap: "anywhere",
+                  }}
+                >
+                  {n.message}
+                </p>
+                <button
+                  onClick={() => setDismissedStatuses((p) => new Set([...p, n.id]))}
+                  aria-label="Dismiss notice"
+                  className="btn btn-ghost btn-icon-sm"
+                  style={{ color: "var(--gray-400)", flexShrink: 0 }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ))}
           </div>
         )}
 

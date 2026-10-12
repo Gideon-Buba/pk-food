@@ -16,6 +16,7 @@ function mockItem(overrides: Record<string, unknown> = {}) {
     onlineStock: 10,
     status: ItemStatus.AVAILABLE,
     category: null,
+    _count: { sides: 0 },
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,

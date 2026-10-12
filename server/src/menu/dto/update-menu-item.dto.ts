@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  Max,
   Min,
 } from 'class-validator';
 import { FoodCategory, ItemStatus } from '@prisma/client';
@@ -49,4 +50,10 @@ export class UpdateMenuItemDto {
   @IsBoolean()
   @IsOptional()
   requiresPackaging?: boolean;
+
+  @IsInt()
+  @Min(0)
+  @Max(90)
+  @IsOptional()
+  discountPercent?: number;
 }

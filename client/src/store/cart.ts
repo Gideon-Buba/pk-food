@@ -1,14 +1,22 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { CartItem, MenuItem, Side } from '../types';
+import { applyDiscount } from '../lib/utils';
 
 function sidesKey(sides: Side[]): string {
   return [...sides].map((s) => s.id).sort().join('|');
 }
 
-function lineTotal(item: CartItem): number {
+export function lineTotal(item: CartItem): number {
   const sidesPrice = item.selectedSides.reduce((sum, s) => sum + s.price, 0);
-  return (item.menuItem.price + sidesPrice) * item.quantity;
+  const unit = applyDiscount(Number(item.menuItem.price), item.menuItem.discountPercent ?? 0);
+  return (unit + sidesPrice) * item.quantity;
+}
+
+// How much the line's item discount saves, for "You save" in the cart.
+export function lineSavings(item: CartItem): number {
+  const price = Number(item.menuItem.price);
+  return (price - applyDiscount(price, item.menuItem.discountPercent ?? 0)) * item.quantity;
 }
 
 interface CartStore {

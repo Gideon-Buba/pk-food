@@ -43,6 +43,8 @@ export interface MenuItem {
   status: ItemStatus;
   category?: FoodCategory | null;
   requiresPackaging: boolean;
+  sideCount?: number;
+  discountPercent?: number;
 }
 
 export interface Side {
@@ -65,7 +67,11 @@ export interface OrderItem {
   menuItem: MenuItem;
   menuItemId: string;
   quantity: number;
+  /** Price charged per unit, after any discount. */
   unitPrice: number;
+  /** Menu price at order time; null on orders placed before discounts were recorded. */
+  originalUnitPrice?: number | null;
+  discountPercent?: number;
   requiresPackaging: boolean;
   sides: OrderItemSide[];
 }
@@ -75,7 +81,16 @@ export type PaymentMethod = 'FLUTTERWAVE' | 'BANK_TRANSFER';
 export interface Order {
   id: string;
   reference: string;
-  user: { name?: string | null; email: string; floor: string | null; officeNumber: string | null };
+  userId: string;
+  user: {
+    id?: string;
+    name?: string | null;
+    email: string;
+    phone?: string | null;
+    floor: string | null;
+    officeNumber: string | null;
+    createdAt?: string;
+  };
   items: OrderItem[];
   deliveryFee: number;
   packagingFee: number;

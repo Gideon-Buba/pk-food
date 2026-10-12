@@ -1,12 +1,27 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Menu, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp, ImagePlus, X, LayoutGrid, LayoutList, Search, Truck, LogOut, ChevronDown, ListPlus, Clock } from 'lucide-react';
+import { Menu, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp, ImagePlus, X, LayoutGrid, LayoutList, Search, Truck, LogOut, ChevronDown, ListPlus, Clock, Settings } from 'lucide-react';
 import QueuePanel from '../components/QueuePanel';
+import OrderDetailPanel from '../components/OrderDetailPanel';
+import RevenuePanel from '../components/RevenuePanel';
+import { FLOORS } from '../constants/floors';
 import toast from 'react-hot-toast';
 import { api, clearToken } from '../api/client';
 import type { ApiResponse, AppSettings, FoodCategory, MenuItem, Order, OrderStatus, Side, User, Vendor } from '../types';
 import { CATEGORY_META, CATEGORY_ORDER } from '../constants/categories';
-import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { applyDiscount } from '../lib/utils';
+
+// Shows what customers will actually pay under the discount field.
+function DiscountHint({ price, discountPercent }: { price: number; discountPercent: number }) {
+  if (discountPercent <= 0 || price <= 0) {
+    return <p style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 4 }}>0 = no discount</p>;
+  }
+  return (
+    <p style={{ fontSize: 11, color: 'var(--primary)', marginTop: 4, fontWeight: 600 }}>
+      Customers pay ₦{applyDiscount(price, discountPercent).toLocaleString()} instead of ₦{price.toLocaleString()}
+    </p>
+  );
+}
 
 interface ImageUploaderProps {
   value: string;
@@ -74,7 +89,7 @@ function ImageUploader({ value, onChange }: ImageUploaderProps) {
   );
 }
 
-type Tab = 'orders' | 'menu' | 'vendors' | 'sides' | 'announcements' | 'revenue' | 'queue';
+type Tab = 'orders' | 'menu' | 'vendors' | 'sides' | 'announcements' | 'revenue' | 'queue' | 'settings';
 
 interface Announcement {
   id: string;
@@ -82,6 +97,14 @@ interface Announcement {
   message: string;
   active: boolean;
   createdAt: string;
+}
+
+type OrderPaymentFilter = '' | 'paid' | 'unpaid';
+type OrderSort = 'newest' | 'oldest' | 'total-desc' | 'total-asc';
+
+// Order dates are compared as Lagos calendar days ("YYYY-MM-DD"), matching the date inputs.
+function lagosDay(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
 }
 
 const NEXT_STATUSES: Partial<Record<OrderStatus, OrderStatus[]>> = {
@@ -100,7 +123,7 @@ function statusBadgeClass(s: OrderStatus): string {
   return m[s];
 }
 
-const VALID_TABS: Tab[] = ['orders', 'revenue', 'menu', 'vendors', 'sides', 'announcements', 'queue'];
+const VALID_TABS: Tab[] = ['orders', 'revenue', 'menu', 'vendors', 'sides', 'announcements', 'queue', 'settings'];
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -124,7 +147,7 @@ export default function AdminDashboard() {
   const [editingVendorId, setEditingVendorId] = useState<string | null>(null);
   const [editingVendorName, setEditingVendorName] = useState('');
   const [showAddItem, setShowAddItem] = useState(false);
-  const [newItem, setNewItem] = useState({ name: '', price: '', vendorId: '', totalStock: '50', onlineStock: '50', image: '', category: '' as FoodCategory | '', requiresPackaging: false });
+  const [newItem, setNewItem] = useState({ name: '', price: '', vendorId: '', totalStock: '50', onlineStock: '50', image: '', category: '' as FoodCategory | '', requiresPackaging: false, discountPercent: '0' });
   const [addingItem, setAddingItem] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [itemSideIds, setItemSideIds] = useState<Set<string>>(new Set());
@@ -159,6 +182,20 @@ export default function AdminDashboard() {
   // Orders filters
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState<OrderStatus | ''>('');
+  const [orderPaymentFilter, setOrderPaymentFilter] = useState<OrderPaymentFilter>('');
+  const [orderFloorFilter, setOrderFloorFilter] = useState('');
+  const [orderVendorFilter, setOrderVendorFilter] = useState('');
+  const [orderDateFrom, setOrderDateFrom] = useState('');
+  const [orderDateTo, setOrderDateTo] = useState('');
+  const [orderSort, setOrderSort] = useState<OrderSort>('newest');
+  const [orderPage, setOrderPage] = useState(1);
+  const [orderPageSize, setOrderPageSize] = useState(20);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+
+  // Back to page 1 whenever the result set changes shape.
+  useEffect(() => {
+    setOrderPage(1);
+  }, [orderSearch, orderStatusFilter, orderPaymentFilter, orderFloorFilter, orderVendorFilter, orderDateFrom, orderDateTo, orderSort, orderPageSize]);
 
   const load = () => {
     setLoading(true);
@@ -198,23 +235,6 @@ export default function AdminDashboard() {
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
       toast.success('Order status updated');
     } catch { toast.error('Failed to update status'); }
-  };
-
-  const confirmPayment = async (orderId: string) => {
-    try {
-      await api.patch(`/payments/${orderId}/confirm-manual`);
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, paid: true, status: 'CONFIRMED' } : o));
-      toast.success('Payment confirmed');
-    } catch { toast.error('Failed to confirm payment'); }
-  };
-
-  const rejectPayment = async (orderId: string) => {
-    if (!window.confirm('Reject this transfer and cancel the order? Stock will be restored.')) return;
-    try {
-      await api.patch(`/payments/${orderId}/reject-manual`);
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'CANCELLED' } : o));
-      toast.success('Transfer rejected, order cancelled');
-    } catch { toast.error('Failed to reject transfer'); }
   };
 
   const handleCreateVendor = async (e: React.FormEvent) => {
@@ -372,6 +392,7 @@ export default function AdminDashboard() {
         vendorId: editingItem.vendorId,
         category: editingItem.category ?? undefined,
         requiresPackaging: editingItem.requiresPackaging,
+        discountPercent: editingItem.discountPercent ?? 0,
       });
       await api.patch(`/menu/items/${editingItem.id}/sides`, { sideIds: [...itemSideIds] });
       setMenuItems(prev => prev.map(m => m.id === editingItem.id ? { ...m, ...editingItem } : m));
@@ -393,8 +414,9 @@ export default function AdminDashboard() {
         image: newItem.image || undefined,
         category: newItem.category || undefined,
         requiresPackaging: newItem.requiresPackaging,
+        discountPercent: parseInt(newItem.discountPercent, 10) || 0,
       });
-      setNewItem({ name: '', price: '', vendorId: '', totalStock: '50', onlineStock: '50', image: '', category: '', requiresPackaging: false });
+      setNewItem({ name: '', price: '', vendorId: '', totalStock: '50', onlineStock: '50', image: '', category: '', requiresPackaging: false, discountPercent: '0' });
       setShowAddItem(false);
       load();
       toast.success('Menu item added');
@@ -466,68 +488,7 @@ export default function AdminDashboard() {
     } catch { toast.error('Failed to delete announcement'); }
   };
 
-  const orderTotal = (o: Order) => Number(o.deliveryFee) + Number(o.packagingFee ?? 0) + o.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0);
-
-  const today = new Date().toDateString();
-  const paidOrders   = orders.filter(o => o.paid);
-  const todayOrders  = orders.filter(o => new Date(o.createdAt).toDateString() === today);
-  const todayPaid    = todayOrders.filter(o => o.paid);
-  const pending      = orders.filter(o => o.status === 'PENDING').length;
-  const active       = orders.filter(o => ['CONFIRMED','PREPARING','READY','IN_TRANSIT'].includes(o.status)).length;
-  const delivered    = orders.filter(o => o.status === 'DELIVERED').length;
-  const cancelled    = orders.filter(o => o.status === 'CANCELLED').length;
-  const revenue      = paidOrders.reduce((s, o) => s + orderTotal(o), 0);
-  const revenueToday = todayPaid.reduce((s, o) => s + orderTotal(o), 0);
-  const avgOrder     = paidOrders.length ? Math.round(revenue / paidOrders.length) : 0;
-
-  // Top items by units sold
-  const itemSales = new Map<string, { name: string; vendorName: string; qty: number; revenue: number }>();
-  orders.forEach(o => {
-    o.items.forEach(i => {
-      const prev = itemSales.get(i.menuItem.id) ?? { name: i.menuItem.name, vendorName: i.menuItem.vendor?.name ?? '—', qty: 0, revenue: 0 };
-      itemSales.set(i.menuItem.id, {
-        name: i.menuItem.name,
-        vendorName: prev.vendorName,
-        qty: prev.qty + i.quantity,
-        revenue: prev.revenue + (o.paid ? Number(i.unitPrice) * i.quantity : 0),
-      });
-    });
-  });
-  const topItems = [...itemSales.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 5);
-
-  // Vendor performance
-  const vendorStats = new Map<string, { name: string; orders: number; revenue: number; qty: number }>();
-  orders.forEach(o => {
-    o.items.forEach(i => {
-      const vid = i.menuItem.vendorId ?? i.menuItem.vendor?.name ?? '?';
-      const vname = i.menuItem.vendor?.name ?? '?';
-      const prev = vendorStats.get(vid) ?? { name: vname, orders: 0, revenue: 0, qty: 0 };
-      vendorStats.set(vid, {
-        name: vname,
-        orders: prev.orders + 1,
-        revenue: prev.revenue + (o.paid ? Number(i.unitPrice) * i.quantity : 0),
-        qty: prev.qty + i.quantity,
-      });
-    });
-  });
-  const vendorList = [...vendorStats.values()].sort((a, b) => b.revenue - a.revenue);
-
-  // Last 7 days revenue
-  const last7 = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - (6 - i));
-    const ds = d.toDateString();
-    const dayOrders = paidOrders.filter(o => new Date(o.createdAt).toDateString() === ds);
-    return { label: d.toLocaleDateString('en-NG', { weekday: 'short' }), value: dayOrders.reduce((s, o) => s + orderTotal(o), 0) };
-  });
-
-  const statusPieData = [
-    { name: 'Delivered', value: delivered, color: '#16a34a' },
-    { name: 'Active',    value: active,    color: '#3b82f6' },
-    { name: 'Pending',   value: pending,   color: '#f59e0b' },
-    { name: 'Cancelled', value: cancelled, color: '#ef4444' },
-  ].filter(d => d.value > 0);
-
-  const VENDOR_COLORS = ['#2d6a4f', '#40916c', '#52b788', '#74c69d', '#95d5b2', '#b7e4c7'];
+  const orderTotal = (o: Order) => Number(o.deliveryFee) + Number(o.packagingFee ?? 0) + o.items.reduce((s, i) => s + (Number(i.unitPrice) + i.sides.reduce((ss, sd) => ss + Number(sd.price), 0)) * i.quantity, 0);
 
   const filteredMenuItems = menuItems.filter(item => {
     if (menuSearch && !item.name.toLowerCase().includes(menuSearch.toLowerCase())) return false;
@@ -538,17 +499,43 @@ export default function AdminDashboard() {
 
   const filteredOrders = orders.filter(order => {
     if (orderSearch) {
-      const q = orderSearch.toLowerCase();
-      const name = order.user.email.split('@')[0].toLowerCase();
-      if (
-        !name.includes(q) &&
-        !order.user.email.toLowerCase().includes(q) &&
-        !(order.reference ?? '').toLowerCase().includes(q)
-      ) return false;
+      const q = orderSearch.toLowerCase().trim();
+      const haystack = [
+        order.user.name, order.user.email, order.user.phone, order.phone,
+        order.reference, order.id, order.officeNumber, order.paymentRef,
+      ].filter(Boolean).join(' ').toLowerCase();
+      if (!haystack.includes(q)) return false;
     }
     if (orderStatusFilter && order.status !== orderStatusFilter) return false;
+    if (orderPaymentFilter === 'paid' && !order.paid) return false;
+    if (orderPaymentFilter === 'unpaid' && order.paid) return false;
+    if (orderFloorFilter && order.floor !== orderFloorFilter) return false;
+    if (orderVendorFilter && !order.items.some(i => i.menuItem.vendorId === orderVendorFilter)) return false;
+    if (orderDateFrom && lagosDay(order.createdAt) < orderDateFrom) return false;
+    if (orderDateTo && lagosDay(order.createdAt) > orderDateTo) return false;
     return true;
+  }).sort((a, b) => {
+    switch (orderSort) {
+      case 'oldest':     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      case 'total-desc': return orderTotal(b) - orderTotal(a);
+      case 'total-asc':  return orderTotal(a) - orderTotal(b);
+      default:           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    }
   });
+
+  const orderFiltersActive = Boolean(
+    orderSearch || orderStatusFilter || orderPaymentFilter ||
+    orderFloorFilter || orderVendorFilter || orderDateFrom || orderDateTo,
+  );
+  const clearOrderFilters = () => {
+    setOrderSearch(''); setOrderStatusFilter(''); setOrderPaymentFilter('');
+    setOrderFloorFilter(''); setOrderVendorFilter(''); setOrderDateFrom(''); setOrderDateTo('');
+  };
+  const orderPageCount = Math.max(1, Math.ceil(filteredOrders.length / orderPageSize));
+  const currentOrderPage = Math.min(orderPage, orderPageCount);
+  const pagedOrders = filteredOrders.slice((currentOrderPage - 1) * orderPageSize, currentOrderPage * orderPageSize);
+  const closeOrderDetail = useCallback(() => setSelectedOrderId(null), []);
+  const selectedOrder = selectedOrderId ? orders.find(o => o.id === selectedOrderId) ?? null : null;
 
   const NAV_ITEMS: { id: Tab; label: string; Icon: React.ElementType }[] = [
     { id: 'orders',        label: 'Orders',    Icon: ShoppingBag },
@@ -558,6 +545,7 @@ export default function AdminDashboard() {
     { id: 'vendors',       label: 'Vendors',   Icon: Store       },
     { id: 'sides',         label: 'Sides',     Icon: ListPlus    },
     { id: 'announcements', label: 'Notices',   Icon: Megaphone   },
+    { id: 'settings',      label: 'Settings',  Icon: Settings    },
   ];
 
   const goTab = (t: Tab) => { setTab(t); setSidebarOpen(false); };
@@ -779,28 +767,54 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Orders toolbar */}
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
-                  <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+                  <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
                     <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', pointerEvents: 'none' }} />
                     <input
                       className="input"
-                      placeholder="Search by customer…"
+                      placeholder="Search name, email, phone, reference, office…"
                       value={orderSearch}
                       onChange={e => setOrderSearch(e.target.value)}
                       style={{ paddingLeft: 32 }}
                     />
                   </div>
-                  <select
-                    className="input"
-                    value={orderStatusFilter}
-                    onChange={e => setOrderStatusFilter(e.target.value as OrderStatus | '')}
-                    style={{ width: 150, cursor: 'pointer', flexShrink: 0 }}
-                  >
+                  <select className="input" value={orderSort} onChange={e => setOrderSort(e.target.value as OrderSort)} style={{ width: 160, cursor: 'pointer', flexShrink: 0 }}>
+                    <option value="newest">Newest first</option>
+                    <option value="oldest">Oldest first</option>
+                    <option value="total-desc">Highest total</option>
+                    <option value="total-asc">Lowest total</option>
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
+                  <select className="input" value={orderStatusFilter} onChange={e => setOrderStatusFilter(e.target.value as OrderStatus | '')} style={{ width: 140, cursor: 'pointer' }}>
                     <option value="">All statuses</option>
                     {(['PENDING','CONFIRMED','PREPARING','READY','IN_TRANSIT','DELIVERED','CANCELLED'] as OrderStatus[]).map(s => (
                       <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
+                  <select className="input" value={orderPaymentFilter} onChange={e => setOrderPaymentFilter(e.target.value as OrderPaymentFilter)} style={{ width: 170, cursor: 'pointer' }}>
+                    <option value="">Any payment status</option>
+                    <option value="paid">Paid</option>
+                    <option value="unpaid">Unpaid</option>
+                  </select>
+                  <select className="input" value={orderFloorFilter} onChange={e => setOrderFloorFilter(e.target.value)} style={{ width: 140, cursor: 'pointer' }}>
+                    <option value="">All floors</option>
+                    {FLOORS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                  </select>
+                  <select className="input" value={orderVendorFilter} onChange={e => setOrderVendorFilter(e.target.value)} style={{ width: 150, cursor: 'pointer' }}>
+                    <option value="">All vendors</option>
+                    {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </select>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input className="input" type="date" value={orderDateFrom} max={orderDateTo || undefined} onChange={e => setOrderDateFrom(e.target.value)} style={{ width: 145 }} aria-label="From date" />
+                    <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>to</span>
+                    <input className="input" type="date" value={orderDateTo} min={orderDateFrom || undefined} onChange={e => setOrderDateTo(e.target.value)} style={{ width: 145 }} aria-label="To date" />
+                  </div>
+                  {orderFiltersActive && (
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={clearOrderFilters}>
+                      <X size={13} /> Clear filters
+                    </button>
+                  )}
                 </div>
 
                 {filteredOrders.length === 0 ? (
@@ -823,12 +837,15 @@ export default function AdminDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredOrders.map(order => {
+                        {pagedOrders.map(order => {
                           const total = orderTotal(order);
                           return (
-                            <tr key={order.id}>
+                            <tr key={order.id} onClick={() => setSelectedOrderId(order.id)} style={{ cursor: 'pointer' }} title="View order details">
                               <td style={{ fontWeight: 500 }}>
                                 {order.user.name || order.user.email.split('@')[0]}
+                                <div style={{ fontSize: 11, color: 'var(--gray-400)', fontWeight: 400 }}>
+                                  {new Date(order.createdAt).toLocaleString('en-NG', { timeZone: 'Africa/Lagos', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                </div>
                                 {order.reference && (
                                   <div style={{ fontSize: 11, color: 'var(--gray-400)', fontFamily: 'monospace', fontWeight: 400 }}>{order.reference}</div>
                                 )}
@@ -846,27 +863,11 @@ export default function AdminDashboard() {
                               <td>
                                 {order.paid ? (
                                   <span className="badge badge-green">Paid</span>
-                                ) : order.paymentMethod === 'BANK_TRANSFER' ? (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
-                                    <span className="badge badge-yellow">Transfer — verify</span>
-                                    {order.transferReference && (
-                                      <span style={{ fontSize: 11, color: 'var(--gray-500)' }}>ref: {order.transferReference}</span>
-                                    )}
-                                    {order.phone && (
-                                      <span style={{ fontSize: 11, color: 'var(--gray-500)' }}>{order.phone}</span>
-                                    )}
-                                    {order.status !== 'CANCELLED' && (
-                                      <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
-                                        <button className="btn btn-primary" style={{ padding: '3px 8px', fontSize: 11 }} onClick={() => confirmPayment(order.id)}>Confirm payment</button>
-                                        <button className="btn btn-secondary" style={{ padding: '3px 8px', fontSize: 11 }} onClick={() => rejectPayment(order.id)}>Reject</button>
-                                      </div>
-                                    )}
-                                  </div>
                                 ) : (
                                   <span className="badge badge-gray">Unpaid</span>
                                 )}
                               </td>
-                              <td>
+                              <td onClick={e => e.stopPropagation()} style={{ cursor: 'default' }}>
                                 {NEXT_STATUSES[order.status] ? (
                                   <select
                                     key={order.status}
@@ -890,203 +891,42 @@ export default function AdminDashboard() {
                     </table>
                   </div>
                 )}
+
+                {filteredOrders.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 14, fontSize: 13, color: 'var(--gray-500)' }}>
+                    <span>
+                      Showing {(currentOrderPage - 1) * orderPageSize + 1}–{Math.min(currentOrderPage * orderPageSize, filteredOrders.length)} of {filteredOrders.length}
+                      {filteredOrders.length !== orders.length && ` (filtered from ${orders.length})`}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <select className="input" value={orderPageSize} onChange={e => setOrderPageSize(Number(e.target.value))} style={{ width: 110, cursor: 'pointer' }} aria-label="Orders per page">
+                        {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n} / page</option>)}
+                      </select>
+                      <button type="button" className="btn btn-secondary btn-sm" disabled={currentOrderPage <= 1} onClick={() => setOrderPage(currentOrderPage - 1)}>Previous</button>
+                      <span style={{ whiteSpace: 'nowrap' }}>Page {currentOrderPage} of {orderPageCount}</span>
+                      <button type="button" className="btn btn-secondary btn-sm" disabled={currentOrderPage >= orderPageCount} onClick={() => setOrderPage(currentOrderPage + 1)}>Next</button>
+                    </div>
+                  </div>
+                )}
+
+                {selectedOrder && (
+                  <OrderDetailPanel
+                    order={selectedOrder}
+                    allOrders={orders}
+                    nextStatuses={NEXT_STATUSES[selectedOrder.status]}
+                    statusBadgeClass={statusBadgeClass}
+                    onClose={closeOrderDetail}
+                    onUpdateStatus={updateStatus}
+                  />
+                )}
               </div>
             )}
 
             {/* Revenue tab */}
-            {tab === 'revenue' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+            {tab === 'revenue' && <RevenuePanel orders={orders} menuItems={menuItems} vendors={vendors} />}
 
-                {/* KPI cards */}
-                <div className="admin-four-col" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
-                  {[
-                    { label: 'Total revenue',  value: `₦${revenue.toLocaleString()}`,       sub: `from ${paidOrders.length} paid orders`, color: '#2d6a4f', bg: '#f0faf5' },
-                    { label: "Today's revenue", value: `₦${revenueToday.toLocaleString()}`,  sub: `${todayOrders.length} orders today`,    color: '#16a34a', bg: '#f0fdf4' },
-                    { label: 'Avg order value', value: `₦${avgOrder.toLocaleString()}`,      sub: 'across paid orders',                    color: '#3b82f6', bg: '#eff6ff' },
-                    { label: 'Payment rate',    value: orders.length ? `${Math.round((paidOrders.length / orders.length) * 100)}%` : '—', sub: `${orders.length - paidOrders.length} unpaid`, color: '#f59e0b', bg: '#fffbeb' },
-                  ].map(c => (
-                    <div key={c.label} style={{ padding: '18px 20px', borderRadius: 'var(--radius-lg)', background: c.bg, border: `1px solid ${c.color}22` }}>
-                      <p style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>{c.label}</p>
-                      <p style={{ fontSize: 24, fontWeight: 800, color: c.color, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 6 }}>{c.value}</p>
-                      <p style={{ fontSize: 11, color: '#9ca3af' }}>{c.sub}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {/* 7-day revenue area chart */}
-                <div>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 16 }}>Revenue — last 7 days</p>
-                  <ResponsiveContainer width="100%" height={230}>
-                    <AreaChart data={last7} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#2d6a4f" stopOpacity={0.25} />
-                          <stop offset="95%" stopColor="#2d6a4f" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-                      <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} />
-                      <YAxis
-                        axisLine={false} tickLine={false}
-                        tick={{ fontSize: 11, fill: '#9ca3af' }}
-                        tickFormatter={v => v >= 1000 ? `₦${(v / 1000).toFixed(0)}k` : `₦${v}`}
-                        width={58}
-                      />
-                      <Tooltip
-                        formatter={(v: unknown) => [`₦${Number(v).toLocaleString()}`, 'Revenue']}
-                        contentStyle={{ borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 13, boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}
-                        cursor={{ stroke: '#2d6a4f', strokeWidth: 1, strokeDasharray: '4 4' }}
-                      />
-                      <Area
-                        type="monotone" dataKey="value" stroke="#2d6a4f" strokeWidth={2.5}
-                        fill="url(#revGrad)"
-                        dot={{ fill: '#2d6a4f', r: 4, strokeWidth: 0 }}
-                        activeDot={{ r: 6, fill: '#2d6a4f', stroke: '#fff', strokeWidth: 2 }}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* Vendor bar + Status donut side by side */}
-                <div className="admin-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 28 }}>
-
-                  {/* Vendor revenue - horizontal bar chart */}
-                  <div>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 16 }}>Revenue by vendor</p>
-                    {vendorList.length === 0 ? (
-                      <p style={{ fontSize: 13, color: '#9ca3af' }}>No orders yet</p>
-                    ) : (
-                      <ResponsiveContainer width="100%" height={Math.max(vendorList.length * 44 + 16, 120)}>
-                        <BarChart data={vendorList} layout="vertical" margin={{ top: 0, right: 12, left: 0, bottom: 0 }}>
-                          <XAxis
-                            type="number" axisLine={false} tickLine={false}
-                            tick={{ fontSize: 11, fill: '#9ca3af' }}
-                            tickFormatter={v => `₦${(v / 1000).toFixed(0)}k`}
-                          />
-                          <YAxis
-                            type="category" dataKey="name" axisLine={false} tickLine={false}
-                            tick={{ fontSize: 12, fill: '#374151' }} width={88}
-                          />
-                          <Tooltip
-                            formatter={(v: unknown) => [`₦${Number(v).toLocaleString()}`, 'Revenue']}
-                            contentStyle={{ borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 13, boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}
-                            cursor={{ fill: 'rgba(45,106,79,0.06)' }}
-                          />
-                          <Bar dataKey="revenue" radius={[0, 6, 6, 0]} barSize={20}>
-                            {vendorList.map((_, i) => (
-                              <Cell key={i} fill={VENDOR_COLORS[i % VENDOR_COLORS.length]} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                  </div>
-
-                  {/* Order status donut */}
-                  <div>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 16 }}>Orders by status</p>
-                    {statusPieData.length === 0 ? (
-                      <p style={{ fontSize: 13, color: '#9ca3af' }}>No orders yet</p>
-                    ) : (
-                      <ResponsiveContainer width="100%" height={200}>
-                        <PieChart>
-                          <Pie
-                            data={statusPieData} cx="50%" cy="50%"
-                            innerRadius={52} outerRadius={80}
-                            paddingAngle={3} dataKey="value" nameKey="name"
-                            strokeWidth={0}
-                          >
-                            {statusPieData.map((entry, i) => (
-                              <Cell key={i} fill={entry.color} />
-                            ))}
-                          </Pie>
-                          <Tooltip
-                            formatter={(v: unknown, name: unknown) => [String(v), String(name)] as [string, string]}
-                            contentStyle={{ borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 13, boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}
-                          />
-                          <Legend
-                            iconType="circle" iconSize={8}
-                            formatter={(value: string) => <span style={{ fontSize: 12, color: '#374151' }}>{value}</span>}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    )}
-                  </div>
-
-                </div>
-
-                {/* Top items table */}
-                <div>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 14 }}>Top items by revenue</p>
-                  {topItems.length === 0 ? (
-                    <p style={{ fontSize: 13, color: '#9ca3af' }}>No orders yet</p>
-                  ) : (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th style={{ width: 32 }}>#</th>
-                            <th>Item</th>
-                            <th>Vendor</th>
-                            <th>Units sold</th>
-                            <th>Revenue</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {topItems.map((item, i) => (
-                            <tr key={item.name}>
-                              <td>
-                                <span style={{ fontWeight: 800, color: i === 0 ? '#2d6a4f' : '#d1d5db', fontSize: 13 }}>#{i + 1}</span>
-                              </td>
-                              <td style={{ fontWeight: 600 }}>{item.name}</td>
-                              <td style={{ color: '#6b7280', fontSize: 13 }}>{item.vendorName}</td>
-                              <td style={{ color: '#374151' }}>{item.qty}</td>
-                              <td style={{ fontWeight: 700, color: '#2d6a4f' }}>₦{item.revenue.toLocaleString()}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-
-              </div>
-            )}
-
-            {/* Menu tab */}
             {tab === 'menu' && (
               <div>
-                {/* Packaging fee setting */}
-                <div className="card" style={{ padding: 16, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                    <Package size={16} color="var(--gray-500)" />
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>Takeaway pack fee</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 13, color: 'var(--gray-400)' }}>₦</span>
-                    <input
-                      className="input"
-                      type="number"
-                      min={0}
-                      value={packagingFeeInput}
-                      onChange={e => setPackagingFeeInput(e.target.value)}
-                      style={{ width: 90 }}
-                    />
-                    <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>per pack</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    disabled={savingPackagingFee || packagingFeeInput === String(settings?.packagingFee ?? '')}
-                    onClick={handleSavePackagingFee}
-                  >
-                    {savingPackagingFee ? <span className="spinner" style={{ width: 13, height: 13 }} /> : 'Save'}
-                  </button>
-                  <p style={{ fontSize: 11, color: 'var(--gray-400)', width: '100%', margin: 0 }}>
-                    Charged once per pack on items marked "Requires takeaway pack" below. Changing this only affects orders placed after the change — past orders keep the fee they were charged at the time.
-                  </p>
-                </div>
-
                 {/* Menu toolbar */}
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
                   <div style={{ position: 'relative', flex: 1, minWidth: 160 }}>
@@ -1203,6 +1043,11 @@ export default function AdminDashboard() {
                         <input className="input" type="number" placeholder="0" value={newItem.price} onChange={e => setNewItem({ ...newItem, price: e.target.value })} required />
                       </div>
                       <div className="form-group">
+                        <label className="label">Discount (%)</label>
+                        <input className="input" type="number" min={0} max={90} value={newItem.discountPercent} onChange={e => setNewItem({ ...newItem, discountPercent: e.target.value })} />
+                        <DiscountHint price={parseFloat(newItem.price) || 0} discountPercent={parseInt(newItem.discountPercent, 10) || 0} />
+                      </div>
+                      <div className="form-group">
                         <label className="label">Vendor</label>
                         <select className="input" value={newItem.vendorId} onChange={e => setNewItem({ ...newItem, vendorId: e.target.value })} required style={{ cursor: 'pointer' }}>
                           <option value="">Select vendor</option>
@@ -1274,6 +1119,11 @@ export default function AdminDashboard() {
                         <div className="form-group">
                           <label className="label">Price (₦)</label>
                           <input className="input" type="number" value={editingItem.price} onChange={e => setEditingItem({ ...editingItem, price: Number(e.target.value) })} required />
+                        </div>
+                        <div className="form-group">
+                          <label className="label">Discount (%)</label>
+                          <input className="input" type="number" min={0} max={90} value={editingItem.discountPercent ?? 0} onChange={e => setEditingItem({ ...editingItem, discountPercent: Math.min(90, Math.max(0, parseInt(e.target.value, 10) || 0)) })} />
+                          <DiscountHint price={Number(editingItem.price)} discountPercent={editingItem.discountPercent ?? 0} />
                         </div>
                         <div className="form-group">
                           <label className="label">Vendor</label>
@@ -1376,6 +1226,9 @@ export default function AdminDashboard() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                               <p style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</p>
                               <span className={`badge ${item.status === 'AVAILABLE' ? 'badge-green' : 'badge-red'}`} style={{ fontSize: 10, flexShrink: 0 }}>{item.status === 'AVAILABLE' ? 'Live' : 'Off'}</span>
+                              {(item.discountPercent ?? 0) > 0 && (
+                                <span className="badge badge-red" style={{ fontSize: 10, flexShrink: 0 }} title="Discounted">-{item.discountPercent}%</span>
+                              )}
                               {item.requiresPackaging && (
                                 <span className="badge" style={{ fontSize: 10, flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--gray-600)', background: 'var(--gray-100)' }} title="Requires a takeaway pack">
                                   <Package size={10} /> Pack
@@ -1433,6 +1286,9 @@ export default function AdminDashboard() {
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 6 }}>
                             <span style={{ fontWeight: 800, color: 'var(--primary)', fontSize: 14 }}>₦{Number(item.price).toLocaleString()}</span>
                             <span style={{ display: 'flex', gap: 4 }}>
+                              {(item.discountPercent ?? 0) > 0 && (
+                                <span className="badge badge-red" style={{ fontSize: 10, flexShrink: 0 }} title="Discounted">-{item.discountPercent}%</span>
+                              )}
                               {item.requiresPackaging && (
                                 <span className="badge" style={{ fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--gray-600)', background: 'var(--gray-100)' }} title="Requires a takeaway pack">
                                   <Package size={10} /> Pack
@@ -1592,6 +1448,41 @@ export default function AdminDashboard() {
                       )}
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {tab === 'settings' && (
+              <div>
+                {/* Packaging fee setting */}
+                <div className="card" style={{ padding: 16, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <Package size={16} color="var(--gray-500)" />
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>Takeaway pack fee</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 13, color: 'var(--gray-400)' }}>₦</span>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0}
+                      value={packagingFeeInput}
+                      onChange={e => setPackagingFeeInput(e.target.value)}
+                      style={{ width: 90 }}
+                    />
+                    <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>per pack</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={savingPackagingFee || packagingFeeInput === String(settings?.packagingFee ?? '')}
+                    onClick={handleSavePackagingFee}
+                  >
+                    {savingPackagingFee ? <span className="spinner" style={{ width: 13, height: 13 }} /> : 'Save'}
+                  </button>
+                  <p style={{ fontSize: 11, color: 'var(--gray-400)', width: '100%', margin: 0 }}>
+                    Charged once per pack on items marked "Requires takeaway pack" below. Changing this only affects orders placed after the change — past orders keep the fee they were charged at the time.
+                  </p>
                 </div>
               </div>
             )}

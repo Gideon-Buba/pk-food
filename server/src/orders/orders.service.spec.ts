@@ -21,6 +21,7 @@ function mockMenuItem(overrides: Record<string, unknown> = {}) {
     onlineStock: 10,
     totalStock: 10,
     vendorId: 'vendor-1',
+    discountPercent: 0,
     ...overrides,
   };
 }
@@ -67,7 +68,6 @@ describe('OrdersService', () => {
 
   const mockConfig = { deliveryFee: 300 };
   const mockSettings = {
-    getPackagingFee: jest.fn().mockResolvedValue(50),
     get: jest.fn().mockResolvedValue({ packagingFee: 50, openTime: '08:00', closeTime: '20:00', isOpen: true }),
   };
 
@@ -164,6 +164,28 @@ describe('OrdersService', () => {
       expect(prisma.order.create).toHaveBeenCalled();
       const createArg = prisma.order.create.mock.calls[0][0] as { data: { reference: string } };
       expect(createArg.data.reference).toMatch(/^PK[0-9A-HJKMNP-TV-Z]{5}$/);
+    });
+
+    type CreatedItems = { data: { items: { create: { unitPrice: number; originalUnitPrice: number; discountPercent: number }[] } } };
+
+    it('charges the full price and records no discount when the item has none', async () => {
+      prisma.menuItem.findMany.mockResolvedValue([mockMenuItem({ discountPercent: 0 })]);
+      prisma.order.create.mockResolvedValue(mockOrder());
+
+      await service.createOrder(actor as never, dto);
+
+      const line = (prisma.order.create.mock.calls[0][0] as CreatedItems).data.items.create[0];
+      expect(line).toMatchObject({ unitPrice: 1500, originalUnitPrice: 1500, discountPercent: 0 });
+    });
+
+    it("charges the item's discounted price and records the original price and %", async () => {
+      prisma.menuItem.findMany.mockResolvedValue([mockMenuItem({ discountPercent: 15 })]);
+      prisma.order.create.mockResolvedValue(mockOrder());
+
+      await service.createOrder(actor as never, dto);
+
+      const line = (prisma.order.create.mock.calls[0][0] as CreatedItems).data.items.create[0];
+      expect(line).toMatchObject({ unitPrice: 1275, originalUnitPrice: 1500, discountPercent: 15 }); // 1500 - 15%
     });
 
     it('sets status to OUT_OF_STOCK when last unit is taken', async () => {

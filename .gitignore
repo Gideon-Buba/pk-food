@@ -5,3 +5,6 @@ dist/
 .DS_Store
 *.log
 prisma/migrations/
+
+# Data backups from one-off maintenance scripts (contain customer data)
+deleted-orders-backup-*.json

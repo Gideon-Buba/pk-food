@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Trash2, Plus, Minus, ShoppingCart } from 'lucide-react';
 import { api } from '../api/client';
-import { useCartStore } from '../store/cart';
+import { lineSavings, lineTotal, useCartStore } from '../store/cart';
 import type { AppSettings, ApiResponse } from '../types';
 
 const DELIVERY_FEE = Number(import.meta.env.VITE_DELIVERY_FEE ?? 300);
@@ -43,6 +43,7 @@ export default function Cart() {
   }
 
   const subtotal = itemsTotal();
+  const savings = items.reduce((s, ci) => s + lineSavings(ci), 0);
   const packagingUnits = items.reduce((s, ci) => s + (ci.menuItem.requiresPackaging ? ci.quantity : 0), 0);
   const packagingFee = packagingUnits * packagingFeePerUnit;
   const total = subtotal + DELIVERY_FEE + packagingFee;
@@ -67,8 +68,7 @@ export default function Cart() {
           {/* Items */}
           <div className="card" style={{ overflow: 'hidden' }}>
             {items.map((ci, idx) => {
-              const sidesPrice = ci.selectedSides.reduce((s, side) => s + side.price, 0);
-              const lineTotal = (ci.menuItem.price + sidesPrice) * ci.quantity;
+              const lineAmount = lineTotal(ci);
               return (
                 <div key={ci.lineId}>
                   <div style={{ padding: '16px', display: 'flex', gap: 14, alignItems: 'center' }}>
@@ -92,7 +92,7 @@ export default function Cart() {
                       </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-                      <span style={{ fontWeight: 800, fontSize: 15, color: 'var(--primary)' }}>₦{lineTotal.toLocaleString()}</span>
+                      <span style={{ fontWeight: 800, fontSize: 15, color: 'var(--primary)' }}>₦{lineAmount.toLocaleString()}</span>
                       <button className="btn btn-ghost btn-icon-sm" onClick={() => removeItem(ci.lineId)} style={{ color: 'var(--gray-400)' }}>
                         <Trash2 size={14} />
                       </button>
@@ -112,6 +112,12 @@ export default function Cart() {
                 <span>Subtotal</span>
                 <span>₦{subtotal.toLocaleString()}</span>
               </div>
+              {savings > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--primary)', fontWeight: 600 }}>
+                  <span>You save</span>
+                  <span>₦{savings.toLocaleString()}</span>
+                </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--gray-600)' }}>
                 <span>Delivery fee</span>
                 <span>₦{DELIVERY_FEE.toLocaleString()}</span>

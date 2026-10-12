@@ -5,7 +5,7 @@
 ## Overview
 
 PK Food is an internal food ordering web app for NRS HQ staff. It lets employees browse
-the PK Canteen menu, place orders — paying via Flutterwave or manual bank transfer — and
+the PK Canteen menu, place orders — paying via Flutterwave — and
 track delivery to their floor/office. Runners fulfill orders; admins manage the full
 operation and get notified of new orders via Web Push and Telegram.
 
@@ -21,7 +21,7 @@ and the React SPA served as a static build.
 | Backend | NestJS + TypeScript (strict mode) |
 | Database | PostgreSQL via Prisma ORM |
 | Auth | Email + password with email verification; JWT sessions |
-| Payments | Flutterwave (initialize, verify, webhook) + manual bank transfer with admin confirmation |
+| Payments | Flutterwave (initialize, verify, webhook) |
 | Notifications | Web Push (VAPID) + Telegram bot, on new order / payment confirmed |
 | File uploads | Cloudinary (food item images) |
 | Frontend | React 18 + Vite + TypeScript |
@@ -60,7 +60,7 @@ Login routes by role: ADMIN → `/admin`, RUNNER → `/runner`, STAFF → `/menu
 - **Role**: `STAFF`, `ADMIN`, `RUNNER`
 - **ItemStatus**: `AVAILABLE`, `UNAVAILABLE`, `OUT_OF_STOCK`
 - **OrderStatus**: `PENDING`, `CONFIRMED`, `PREPARING`, `READY`, `IN_TRANSIT`, `DELIVERED`, `CANCELLED`
-- **PaymentMethod**: `FLUTTERWAVE` (default), `BANK_TRANSFER`
+- **PaymentMethod**: `FLUTTERWAVE` (default), `BANK_TRANSFER` (no longer offered; kept so older orders still load)
 - **FoodCategory**: `RICE`, `SWALLOW`, `PROTEIN`, `SIDES`, `PASTA`, `PASTRIES`, `BUFFET`, `DRINKS`
 - **AnnouncementType**: `STATUS`, `GENERAL`
 - **Floor**: `GF`, `F1` … `F16`
@@ -129,10 +129,6 @@ PENDING → CONFIRMED → PREPARING → READY → IN_TRANSIT → DELIVERED
 |---|---|---|---|
 | POST | `/payments/initialize` | Any role | Initialize Flutterwave transaction, returns hosted payment link |
 | GET | `/payments/verify/:transactionId` | Any role | Verify payment by Flutterwave transaction id |
-| GET | `/payments/bank-details` | Any role | Get bank account details for manual transfer |
-| POST | `/payments/bank-transfer` | Any role | Submit a manual bank transfer reference for an order (pending admin confirmation) |
-| PATCH | `/payments/:orderId/confirm-manual` | ADMIN | Confirm a manual bank transfer, marks order paid + CONFIRMED |
-| PATCH | `/payments/:orderId/reject-manual` | ADMIN | Reject a manual bank transfer, restores stock and cancels order |
 | POST | `/webhooks/flutterwave` | Public | Flutterwave webhook (verifies `verif-hash` against `FLW_SECRET_HASH`, re-verifies transaction via API before crediting) |
 
 ### Notifications
@@ -169,7 +165,7 @@ admin manual confirmation) rather than at order creation, to avoid notifying on 
 | Reset Password | `/reset-password?token=` | Set new password |
 | Menu | `/menu` | Browse all available items; category tabs (Rice, Swallow, Protein, Sides, Pasta, Pastries, Buffet, Drinks); inline cart sidebar; search by item name; add/update quantity; active order bar shows current order status |
 | Cart | `/cart` | Review cart items; adjust quantities; see delivery fee breakdown; proceed to checkout |
-| Checkout | `/checkout` | Confirm delivery floor + office + phone; choose Flutterwave (redirects to hosted payment page) or manual bank transfer (shows account details, submits transfer reference for admin review) |
+| Checkout | `/checkout` | Confirm delivery floor + office + phone; pay with Flutterwave (redirects to hosted payment page) |
 | Order Confirmation | `/order-confirmation` | Post-payment success page; links to order history |
 | My Orders | `/orders` | Full order history with status badges and item breakdowns |
 | Profile | `/profile` | Update name, phone, floor, office number |
@@ -180,7 +176,7 @@ Collapsible sidebar navigation with 5 tabs:
 
 | Tab | Capabilities |
 |---|---|
-| **Orders** | View all orders; search by name/email/office/floor; filter by status; update status via FSM buttons; see full item breakdown per order; confirm or reject pending bank transfers |
+| **Orders** | View all orders; search by name/email/office/floor; filter by status; update status via FSM buttons; see full item breakdown per order |
 | **Menu** | View all items; search by name; filter by category; filter by vendor; toggle list/grid view; select mode with animated checkboxes; bulk delete; add item (name, price, category, vendor, stock, image upload); edit item inline; delete item |
 | **Vendors** | View all vendors; add vendor; rename vendor; delete vendor |
 | **Announcements** | View all announcements (STATUS or GENERAL type); toggle active/inactive; create announcement; delete announcement |
@@ -198,7 +194,7 @@ Collapsible sidebar navigation with 5 tabs:
 ## Delivery Fee
 
 Flat ₦300 per order, configurable via the `DELIVERY_FEE` environment variable. The fee is
-included in both the Flutterwave initialization amount and the total shown for bank transfer.
+included in the Flutterwave initialization amount.
 
 ---
 
@@ -208,9 +204,6 @@ included in both the Flutterwave initialization amount and the total shown for b
   returns a hosted payment link. `GET /payments/verify/:transactionId` and the
   `/webhooks/flutterwave` webhook both re-verify the transaction against the Flutterwave API
   before marking an order paid — the webhook alone is never trusted.
-- **Bank transfer**: staff submit a transfer reference against an order; the order is held as
-  unpaid/PENDING until an admin confirms (`confirm-manual`, marks paid + CONFIRMED, fires
-  notification) or rejects (`reject-manual`, restores stock, cancels order) it.
 - Webhook signature is checked via the `verif-hash` header against `FLW_SECRET_HASH`.
 
 ---
