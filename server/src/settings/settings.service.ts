@@ -18,12 +18,13 @@ interface SettingsRow {
   closeTime: string;
 }
 
-function serialize(row: SettingsRow): AppSettings {
+// Outside production the store is always open, so local dev isn't blocked by real-world hours.
+function serialize(row: SettingsRow, ignoreHours: boolean): AppSettings {
   return {
     packagingFee: row.packagingFee,
     openTime: row.openTime,
     closeTime: row.closeTime,
-    isOpen: isWithinStoreHours(row.openTime, row.closeTime),
+    isOpen: ignoreHours || isWithinStoreHours(row.openTime, row.closeTime),
   };
 }
 
@@ -46,7 +47,7 @@ export class SettingsService {
       update: {},
       create: { id: SETTINGS_ID, packagingFee: this.config.packagingFee },
     });
-    return serialize(settings);
+    return serialize(settings, this.config.isDev);
   }
 
   async getPackagingFee(): Promise<number> {
@@ -75,6 +76,6 @@ export class SettingsService {
         closeTime: input.closeTime ?? current?.closeTime ?? '20:00',
       },
     });
-    return serialize(settings);
+    return serialize(settings, this.config.isDev);
   }
 }
