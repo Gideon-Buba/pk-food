@@ -6,8 +6,7 @@ const CODE_LENGTH = 5;
 
 /**
  * Generate a short, human-friendly order reference, e.g. "PK7BN".
- * The buyer quotes this as the bank-transfer narration; the admin matches
- * the bank statement against it.
+ * Shown to staff and admins so an order can be identified at a glance.
  */
 export function generateOrderReference(): string {
   let code = '';
