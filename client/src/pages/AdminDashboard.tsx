@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Menu, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp, ImagePlus, X, LayoutGrid, LayoutList, Search, Truck, LogOut, ChevronDown, ListPlus, Clock } from 'lucide-react';
+import { Menu, Plus, RefreshCw, ToggleLeft, ToggleRight, Package, ShoppingBag, Store, Megaphone, Trash2, TrendingUp, ImagePlus, X, LayoutGrid, LayoutList, Search, Truck, LogOut, ChevronDown, ListPlus, Clock, Percent, Settings } from 'lucide-react';
 import QueuePanel from '../components/QueuePanel';
+import OrderDetailPanel from '../components/OrderDetailPanel';
+import { FLOORS } from '../constants/floors';
 import toast from 'react-hot-toast';
 import { api, clearToken } from '../api/client';
 import type { ApiResponse, AppSettings, FoodCategory, MenuItem, Order, OrderStatus, Side, User, Vendor } from '../types';
@@ -74,7 +76,7 @@ function ImageUploader({ value, onChange }: ImageUploaderProps) {
   );
 }
 
-type Tab = 'orders' | 'menu' | 'vendors' | 'sides' | 'announcements' | 'revenue' | 'queue';
+type Tab = 'orders' | 'menu' | 'vendors' | 'sides' | 'announcements' | 'revenue' | 'queue' | 'settings';
 
 interface Announcement {
   id: string;
@@ -82,6 +84,14 @@ interface Announcement {
   message: string;
   active: boolean;
   createdAt: string;
+}
+
+type OrderPaymentFilter = '' | 'paid' | 'unpaid';
+type OrderSort = 'newest' | 'oldest' | 'total-desc' | 'total-asc';
+
+// Order dates are compared as Lagos calendar days ("YYYY-MM-DD"), matching the date inputs.
+function lagosDay(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
 }
 
 const NEXT_STATUSES: Partial<Record<OrderStatus, OrderStatus[]>> = {
@@ -100,7 +110,7 @@ function statusBadgeClass(s: OrderStatus): string {
   return m[s];
 }
 
-const VALID_TABS: Tab[] = ['orders', 'revenue', 'menu', 'vendors', 'sides', 'announcements', 'queue'];
+const VALID_TABS: Tab[] = ['orders', 'revenue', 'menu', 'vendors', 'sides', 'announcements', 'queue', 'settings'];
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -139,6 +149,8 @@ export default function AdminDashboard() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [packagingFeeInput, setPackagingFeeInput] = useState('');
   const [savingPackagingFee, setSavingPackagingFee] = useState(false);
+  const [discountInput, setDiscountInput] = useState('');
+  const [savingDiscount, setSavingDiscount] = useState(false);
   const [openTimeInput, setOpenTimeInput] = useState('');
   const [closeTimeInput, setCloseTimeInput] = useState('');
   const [savingHours, setSavingHours] = useState(false);
@@ -159,6 +171,20 @@ export default function AdminDashboard() {
   // Orders filters
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState<OrderStatus | ''>('');
+  const [orderPaymentFilter, setOrderPaymentFilter] = useState<OrderPaymentFilter>('');
+  const [orderFloorFilter, setOrderFloorFilter] = useState('');
+  const [orderVendorFilter, setOrderVendorFilter] = useState('');
+  const [orderDateFrom, setOrderDateFrom] = useState('');
+  const [orderDateTo, setOrderDateTo] = useState('');
+  const [orderSort, setOrderSort] = useState<OrderSort>('newest');
+  const [orderPage, setOrderPage] = useState(1);
+  const [orderPageSize, setOrderPageSize] = useState(20);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+
+  // Back to page 1 whenever the result set changes shape.
+  useEffect(() => {
+    setOrderPage(1);
+  }, [orderSearch, orderStatusFilter, orderPaymentFilter, orderFloorFilter, orderVendorFilter, orderDateFrom, orderDateTo, orderSort, orderPageSize]);
 
   const load = () => {
     setLoading(true);
@@ -177,6 +203,7 @@ export default function AdminDashboard() {
         setAnnouncements(a.data.data);
         setSettings(s.data.data);
         setPackagingFeeInput(String(s.data.data.packagingFee));
+        setDiscountInput(String(s.data.data.discountPercent));
         setOpenTimeInput(s.data.data.openTime);
         setCloseTimeInput(s.data.data.closeTime);
         setSides(sd.data.data);
@@ -198,23 +225,6 @@ export default function AdminDashboard() {
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
       toast.success('Order status updated');
     } catch { toast.error('Failed to update status'); }
-  };
-
-  const confirmPayment = async (orderId: string) => {
-    try {
-      await api.patch(`/payments/${orderId}/confirm-manual`);
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, paid: true, status: 'CONFIRMED' } : o));
-      toast.success('Payment confirmed');
-    } catch { toast.error('Failed to confirm payment'); }
-  };
-
-  const rejectPayment = async (orderId: string) => {
-    if (!window.confirm('Reject this transfer and cancel the order? Stock will be restored.')) return;
-    try {
-      await api.patch(`/payments/${orderId}/reject-manual`);
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'CANCELLED' } : o));
-      toast.success('Transfer rejected, order cancelled');
-    } catch { toast.error('Failed to reject transfer'); }
   };
 
   const handleCreateVendor = async (e: React.FormEvent) => {
@@ -415,6 +425,19 @@ export default function AdminDashboard() {
     finally { setSavingPackagingFee(false); }
   };
 
+  const handleSaveDiscount = async (value: string) => {
+    const pct = parseInt(value, 10);
+    if (isNaN(pct) || pct < 0 || pct > 90) { toast.error('Enter a discount between 0 and 90%'); return; }
+    setSavingDiscount(true);
+    try {
+      const res = await api.patch<ApiResponse<AppSettings>>('/settings', { discountPercent: pct });
+      setSettings(res.data.data);
+      setDiscountInput(String(res.data.data.discountPercent));
+      toast.success(pct === 0 ? 'Discount turned off' : `${pct}% off applied to all menu items`);
+    } catch { toast.error('Failed to update discount'); }
+    finally { setSavingDiscount(false); }
+  };
+
   const handleSaveHours = async () => {
     setSavingHours(true);
     try {
@@ -466,7 +489,7 @@ export default function AdminDashboard() {
     } catch { toast.error('Failed to delete announcement'); }
   };
 
-  const orderTotal = (o: Order) => Number(o.deliveryFee) + Number(o.packagingFee ?? 0) + o.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0);
+  const orderTotal = (o: Order) => Number(o.deliveryFee) + Number(o.packagingFee ?? 0) + o.items.reduce((s, i) => s + (Number(i.unitPrice) + i.sides.reduce((ss, sd) => ss + Number(sd.price), 0)) * i.quantity, 0);
 
   const today = new Date().toDateString();
   const paidOrders   = orders.filter(o => o.paid);
@@ -538,17 +561,43 @@ export default function AdminDashboard() {
 
   const filteredOrders = orders.filter(order => {
     if (orderSearch) {
-      const q = orderSearch.toLowerCase();
-      const name = order.user.email.split('@')[0].toLowerCase();
-      if (
-        !name.includes(q) &&
-        !order.user.email.toLowerCase().includes(q) &&
-        !(order.reference ?? '').toLowerCase().includes(q)
-      ) return false;
+      const q = orderSearch.toLowerCase().trim();
+      const haystack = [
+        order.user.name, order.user.email, order.user.phone, order.phone,
+        order.reference, order.id, order.officeNumber, order.paymentRef,
+      ].filter(Boolean).join(' ').toLowerCase();
+      if (!haystack.includes(q)) return false;
     }
     if (orderStatusFilter && order.status !== orderStatusFilter) return false;
+    if (orderPaymentFilter === 'paid' && !order.paid) return false;
+    if (orderPaymentFilter === 'unpaid' && order.paid) return false;
+    if (orderFloorFilter && order.floor !== orderFloorFilter) return false;
+    if (orderVendorFilter && !order.items.some(i => i.menuItem.vendorId === orderVendorFilter)) return false;
+    if (orderDateFrom && lagosDay(order.createdAt) < orderDateFrom) return false;
+    if (orderDateTo && lagosDay(order.createdAt) > orderDateTo) return false;
     return true;
+  }).sort((a, b) => {
+    switch (orderSort) {
+      case 'oldest':     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      case 'total-desc': return orderTotal(b) - orderTotal(a);
+      case 'total-asc':  return orderTotal(a) - orderTotal(b);
+      default:           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    }
   });
+
+  const orderFiltersActive = Boolean(
+    orderSearch || orderStatusFilter || orderPaymentFilter ||
+    orderFloorFilter || orderVendorFilter || orderDateFrom || orderDateTo,
+  );
+  const clearOrderFilters = () => {
+    setOrderSearch(''); setOrderStatusFilter(''); setOrderPaymentFilter('');
+    setOrderFloorFilter(''); setOrderVendorFilter(''); setOrderDateFrom(''); setOrderDateTo('');
+  };
+  const orderPageCount = Math.max(1, Math.ceil(filteredOrders.length / orderPageSize));
+  const currentOrderPage = Math.min(orderPage, orderPageCount);
+  const pagedOrders = filteredOrders.slice((currentOrderPage - 1) * orderPageSize, currentOrderPage * orderPageSize);
+  const closeOrderDetail = useCallback(() => setSelectedOrderId(null), []);
+  const selectedOrder = selectedOrderId ? orders.find(o => o.id === selectedOrderId) ?? null : null;
 
   const NAV_ITEMS: { id: Tab; label: string; Icon: React.ElementType }[] = [
     { id: 'orders',        label: 'Orders',    Icon: ShoppingBag },
@@ -558,6 +607,7 @@ export default function AdminDashboard() {
     { id: 'vendors',       label: 'Vendors',   Icon: Store       },
     { id: 'sides',         label: 'Sides',     Icon: ListPlus    },
     { id: 'announcements', label: 'Notices',   Icon: Megaphone   },
+    { id: 'settings',      label: 'Settings',  Icon: Settings    },
   ];
 
   const goTab = (t: Tab) => { setTab(t); setSidebarOpen(false); };
@@ -779,28 +829,54 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Orders toolbar */}
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
-                  <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+                  <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
                     <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', pointerEvents: 'none' }} />
                     <input
                       className="input"
-                      placeholder="Search by customer…"
+                      placeholder="Search name, email, phone, reference, office…"
                       value={orderSearch}
                       onChange={e => setOrderSearch(e.target.value)}
                       style={{ paddingLeft: 32 }}
                     />
                   </div>
-                  <select
-                    className="input"
-                    value={orderStatusFilter}
-                    onChange={e => setOrderStatusFilter(e.target.value as OrderStatus | '')}
-                    style={{ width: 150, cursor: 'pointer', flexShrink: 0 }}
-                  >
+                  <select className="input" value={orderSort} onChange={e => setOrderSort(e.target.value as OrderSort)} style={{ width: 160, cursor: 'pointer', flexShrink: 0 }}>
+                    <option value="newest">Newest first</option>
+                    <option value="oldest">Oldest first</option>
+                    <option value="total-desc">Highest total</option>
+                    <option value="total-asc">Lowest total</option>
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
+                  <select className="input" value={orderStatusFilter} onChange={e => setOrderStatusFilter(e.target.value as OrderStatus | '')} style={{ width: 140, cursor: 'pointer' }}>
                     <option value="">All statuses</option>
                     {(['PENDING','CONFIRMED','PREPARING','READY','IN_TRANSIT','DELIVERED','CANCELLED'] as OrderStatus[]).map(s => (
                       <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
+                  <select className="input" value={orderPaymentFilter} onChange={e => setOrderPaymentFilter(e.target.value as OrderPaymentFilter)} style={{ width: 170, cursor: 'pointer' }}>
+                    <option value="">Any payment status</option>
+                    <option value="paid">Paid</option>
+                    <option value="unpaid">Unpaid</option>
+                  </select>
+                  <select className="input" value={orderFloorFilter} onChange={e => setOrderFloorFilter(e.target.value)} style={{ width: 140, cursor: 'pointer' }}>
+                    <option value="">All floors</option>
+                    {FLOORS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                  </select>
+                  <select className="input" value={orderVendorFilter} onChange={e => setOrderVendorFilter(e.target.value)} style={{ width: 150, cursor: 'pointer' }}>
+                    <option value="">All vendors</option>
+                    {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </select>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input className="input" type="date" value={orderDateFrom} max={orderDateTo || undefined} onChange={e => setOrderDateFrom(e.target.value)} style={{ width: 145 }} aria-label="From date" />
+                    <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>to</span>
+                    <input className="input" type="date" value={orderDateTo} min={orderDateFrom || undefined} onChange={e => setOrderDateTo(e.target.value)} style={{ width: 145 }} aria-label="To date" />
+                  </div>
+                  {orderFiltersActive && (
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={clearOrderFilters}>
+                      <X size={13} /> Clear filters
+                    </button>
+                  )}
                 </div>
 
                 {filteredOrders.length === 0 ? (
@@ -823,12 +899,15 @@ export default function AdminDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredOrders.map(order => {
+                        {pagedOrders.map(order => {
                           const total = orderTotal(order);
                           return (
-                            <tr key={order.id}>
+                            <tr key={order.id} onClick={() => setSelectedOrderId(order.id)} style={{ cursor: 'pointer' }} title="View order details">
                               <td style={{ fontWeight: 500 }}>
                                 {order.user.name || order.user.email.split('@')[0]}
+                                <div style={{ fontSize: 11, color: 'var(--gray-400)', fontWeight: 400 }}>
+                                  {new Date(order.createdAt).toLocaleString('en-NG', { timeZone: 'Africa/Lagos', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                </div>
                                 {order.reference && (
                                   <div style={{ fontSize: 11, color: 'var(--gray-400)', fontFamily: 'monospace', fontWeight: 400 }}>{order.reference}</div>
                                 )}
@@ -846,27 +925,11 @@ export default function AdminDashboard() {
                               <td>
                                 {order.paid ? (
                                   <span className="badge badge-green">Paid</span>
-                                ) : order.paymentMethod === 'BANK_TRANSFER' ? (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
-                                    <span className="badge badge-yellow">Transfer — verify</span>
-                                    {order.transferReference && (
-                                      <span style={{ fontSize: 11, color: 'var(--gray-500)' }}>ref: {order.transferReference}</span>
-                                    )}
-                                    {order.phone && (
-                                      <span style={{ fontSize: 11, color: 'var(--gray-500)' }}>{order.phone}</span>
-                                    )}
-                                    {order.status !== 'CANCELLED' && (
-                                      <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
-                                        <button className="btn btn-primary" style={{ padding: '3px 8px', fontSize: 11 }} onClick={() => confirmPayment(order.id)}>Confirm payment</button>
-                                        <button className="btn btn-secondary" style={{ padding: '3px 8px', fontSize: 11 }} onClick={() => rejectPayment(order.id)}>Reject</button>
-                                      </div>
-                                    )}
-                                  </div>
                                 ) : (
                                   <span className="badge badge-gray">Unpaid</span>
                                 )}
                               </td>
-                              <td>
+                              <td onClick={e => e.stopPropagation()} style={{ cursor: 'default' }}>
                                 {NEXT_STATUSES[order.status] ? (
                                   <select
                                     key={order.status}
@@ -889,6 +952,34 @@ export default function AdminDashboard() {
                       </tbody>
                     </table>
                   </div>
+                )}
+
+                {filteredOrders.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 14, fontSize: 13, color: 'var(--gray-500)' }}>
+                    <span>
+                      Showing {(currentOrderPage - 1) * orderPageSize + 1}–{Math.min(currentOrderPage * orderPageSize, filteredOrders.length)} of {filteredOrders.length}
+                      {filteredOrders.length !== orders.length && ` (filtered from ${orders.length})`}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <select className="input" value={orderPageSize} onChange={e => setOrderPageSize(Number(e.target.value))} style={{ width: 110, cursor: 'pointer' }} aria-label="Orders per page">
+                        {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n} / page</option>)}
+                      </select>
+                      <button type="button" className="btn btn-secondary btn-sm" disabled={currentOrderPage <= 1} onClick={() => setOrderPage(currentOrderPage - 1)}>Previous</button>
+                      <span style={{ whiteSpace: 'nowrap' }}>Page {currentOrderPage} of {orderPageCount}</span>
+                      <button type="button" className="btn btn-secondary btn-sm" disabled={currentOrderPage >= orderPageCount} onClick={() => setOrderPage(currentOrderPage + 1)}>Next</button>
+                    </div>
+                  </div>
+                )}
+
+                {selectedOrder && (
+                  <OrderDetailPanel
+                    order={selectedOrder}
+                    allOrders={orders}
+                    nextStatuses={NEXT_STATUSES[selectedOrder.status]}
+                    statusBadgeClass={statusBadgeClass}
+                    onClose={closeOrderDetail}
+                    onUpdateStatus={updateStatus}
+                  />
                 )}
               </div>
             )}
@@ -1056,37 +1147,6 @@ export default function AdminDashboard() {
             {/* Menu tab */}
             {tab === 'menu' && (
               <div>
-                {/* Packaging fee setting */}
-                <div className="card" style={{ padding: 16, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                    <Package size={16} color="var(--gray-500)" />
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>Takeaway pack fee</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 13, color: 'var(--gray-400)' }}>₦</span>
-                    <input
-                      className="input"
-                      type="number"
-                      min={0}
-                      value={packagingFeeInput}
-                      onChange={e => setPackagingFeeInput(e.target.value)}
-                      style={{ width: 90 }}
-                    />
-                    <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>per pack</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    disabled={savingPackagingFee || packagingFeeInput === String(settings?.packagingFee ?? '')}
-                    onClick={handleSavePackagingFee}
-                  >
-                    {savingPackagingFee ? <span className="spinner" style={{ width: 13, height: 13 }} /> : 'Save'}
-                  </button>
-                  <p style={{ fontSize: 11, color: 'var(--gray-400)', width: '100%', margin: 0 }}>
-                    Charged once per pack on items marked "Requires takeaway pack" below. Changing this only affects orders placed after the change — past orders keep the fee they were charged at the time.
-                  </p>
-                </div>
-
                 {/* Menu toolbar */}
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
                   <div style={{ position: 'relative', flex: 1, minWidth: 160 }}>
@@ -1592,6 +1652,85 @@ export default function AdminDashboard() {
                       )}
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {tab === 'settings' && (
+              <div>
+                {/* Packaging fee setting */}
+                <div className="card" style={{ padding: 16, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <Package size={16} color="var(--gray-500)" />
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>Takeaway pack fee</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 13, color: 'var(--gray-400)' }}>₦</span>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0}
+                      value={packagingFeeInput}
+                      onChange={e => setPackagingFeeInput(e.target.value)}
+                      style={{ width: 90 }}
+                    />
+                    <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>per pack</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={savingPackagingFee || packagingFeeInput === String(settings?.packagingFee ?? '')}
+                    onClick={handleSavePackagingFee}
+                  >
+                    {savingPackagingFee ? <span className="spinner" style={{ width: 13, height: 13 }} /> : 'Save'}
+                  </button>
+                  <p style={{ fontSize: 11, color: 'var(--gray-400)', width: '100%', margin: 0 }}>
+                    Charged once per pack on items marked "Requires takeaway pack" below. Changing this only affects orders placed after the change — past orders keep the fee they were charged at the time.
+                  </p>
+                </div>
+
+                {/* Store-wide discount */}
+                <div className="card" style={{ padding: 16, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <Percent size={16} color="var(--gray-500)" />
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>Discount on all items</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0}
+                      max={90}
+                      value={discountInput}
+                      onChange={e => setDiscountInput(e.target.value)}
+                      style={{ width: 90 }}
+                    />
+                    <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>% off</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={savingDiscount || discountInput === String(settings?.discountPercent ?? '')}
+                    onClick={() => handleSaveDiscount(discountInput)}
+                  >
+                    {savingDiscount ? <span className="spinner" style={{ width: 13, height: 13 }} /> : 'Save'}
+                  </button>
+                  {(settings?.discountPercent ?? 0) > 0 && (
+                    <>
+                      <span className="badge badge-green">{settings?.discountPercent}% off live</span>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        disabled={savingDiscount}
+                        onClick={() => handleSaveDiscount('0')}
+                      >
+                        Turn off
+                      </button>
+                    </>
+                  )}
+                  <p style={{ fontSize: 11, color: 'var(--gray-400)', width: '100%', margin: 0 }}>
+                    Takes this percentage off every menu item's price. Sides, delivery and pack fees aren't discounted. Your saved prices don't change, so set it back to 0 to end the promo. Past orders keep the price they were charged.
+                  </p>
                 </div>
               </div>
             )}

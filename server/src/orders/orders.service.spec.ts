@@ -67,8 +67,7 @@ describe('OrdersService', () => {
 
   const mockConfig = { deliveryFee: 300 };
   const mockSettings = {
-    getPackagingFee: jest.fn().mockResolvedValue(50),
-    get: jest.fn().mockResolvedValue({ packagingFee: 50, openTime: '08:00', closeTime: '20:00', isOpen: true }),
+    get: jest.fn().mockResolvedValue({ packagingFee: 50, openTime: '08:00', closeTime: '20:00', discountPercent: 0, isOpen: true }),
   };
 
   beforeEach(async () => {
@@ -120,7 +119,7 @@ describe('OrdersService', () => {
     const actor = mockUser();
 
     it('throws BadRequestException when the store is closed', async () => {
-      mockSettings.get.mockResolvedValueOnce({ packagingFee: 50, openTime: '08:00', closeTime: '20:00', isOpen: false });
+      mockSettings.get.mockResolvedValueOnce({ packagingFee: 50, openTime: '08:00', closeTime: '20:00', discountPercent: 0, isOpen: false });
 
       await expect(service.createOrder(actor as never, dto)).rejects.toThrow(BadRequestException);
     });
@@ -164,6 +163,31 @@ describe('OrdersService', () => {
       expect(prisma.order.create).toHaveBeenCalled();
       const createArg = prisma.order.create.mock.calls[0][0] as { data: { reference: string } };
       expect(createArg.data.reference).toMatch(/^PK[0-9A-HJKMNP-TV-Z]{5}$/);
+    });
+
+    it('stores the undiscounted price when there is no discount', async () => {
+      prisma.menuItem.findMany.mockResolvedValue([mockMenuItem()]);
+      prisma.order.create.mockResolvedValue(mockOrder());
+
+      await service.createOrder(actor as never, dto);
+
+      const createArg = prisma.order.create.mock.calls[0][0] as {
+        data: { items: { create: { unitPrice: number }[] } };
+      };
+      expect(createArg.data.items.create[0].unitPrice).toBe(1500);
+    });
+
+    it('applies the store-wide discount to the stored unit price', async () => {
+      mockSettings.get.mockResolvedValueOnce({ packagingFee: 50, openTime: '08:00', closeTime: '20:00', discountPercent: 15, isOpen: true });
+      prisma.menuItem.findMany.mockResolvedValue([mockMenuItem()]);
+      prisma.order.create.mockResolvedValue(mockOrder());
+
+      await service.createOrder(actor as never, dto);
+
+      const createArg = prisma.order.create.mock.calls[0][0] as {
+        data: { items: { create: { unitPrice: number }[] } };
+      };
+      expect(createArg.data.items.create[0].unitPrice).toBe(1275); // 1500 - 15%
     });
 
     it('sets status to OUT_OF_STOCK when last unit is taken', async () => {

@@ -237,6 +237,8 @@ model Settings {
   // "HH:mm" 24h, evaluated in Africa/Lagos — see store-hours.util.ts
   openTime     String   @default("08:00")
   closeTime    String   @default("20:00")
+  // Store-wide % off menu item prices (not sides or fees). 0 = no discount.
+  discountPercent Int   @default(0)
   updatedAt    DateTime @updatedAt
 
   @@map("settings")

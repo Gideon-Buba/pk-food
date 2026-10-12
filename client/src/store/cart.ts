@@ -1,14 +1,15 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { CartItem, MenuItem, Side } from '../types';
+import { applyDiscount } from '../lib/utils';
 
 function sidesKey(sides: Side[]): string {
   return [...sides].map((s) => s.id).sort().join('|');
 }
 
-function lineTotal(item: CartItem): number {
+export function lineTotal(item: CartItem, discountPercent = 0): number {
   const sidesPrice = item.selectedSides.reduce((sum, s) => sum + s.price, 0);
-  return (item.menuItem.price + sidesPrice) * item.quantity;
+  return (applyDiscount(Number(item.menuItem.price), discountPercent) + sidesPrice) * item.quantity;
 }
 
 interface CartStore {
@@ -17,7 +18,7 @@ interface CartStore {
   removeItem: (lineId: string) => void;
   updateQuantity: (lineId: string, quantity: number) => void;
   clearCart: () => void;
-  itemsTotal: () => number;
+  itemsTotal: (discountPercent?: number) => number;
   itemCount: () => number;
 }
 
@@ -67,7 +68,8 @@ export const useCartStore = create<CartStore>()(
 
       clearCart: () => set({ items: [] }),
 
-      itemsTotal: () => get().items.reduce((sum, item) => sum + lineTotal(item), 0),
+      itemsTotal: (discountPercent = 0) =>
+        get().items.reduce((sum, item) => sum + lineTotal(item, discountPercent), 0),
 
       itemCount: () =>
         get().items.reduce((sum, item) => sum + item.quantity, 0),

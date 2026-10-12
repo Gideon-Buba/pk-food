@@ -75,7 +75,16 @@ export type PaymentMethod = 'FLUTTERWAVE' | 'BANK_TRANSFER';
 export interface Order {
   id: string;
   reference: string;
-  user: { name?: string | null; email: string; floor: string | null; officeNumber: string | null };
+  userId: string;
+  user: {
+    id?: string;
+    name?: string | null;
+    email: string;
+    phone?: string | null;
+    floor: string | null;
+    officeNumber: string | null;
+    createdAt?: string;
+  };
   items: OrderItem[];
   deliveryFee: number;
   packagingFee: number;
@@ -109,6 +118,7 @@ export interface AppSettings {
   packagingFee: number;
   openTime: string;
   closeTime: string;
+  discountPercent: number;
   isOpen: boolean;
 }
 

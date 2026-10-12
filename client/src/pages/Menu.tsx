@@ -19,6 +19,7 @@ import {
 import toast from "react-hot-toast";
 import { api, clearToken, getToken } from "../api/client";
 import { useCartStore } from "../store/cart";
+import { applyDiscount } from "../lib/utils";
 import { CATEGORY_META, CATEGORY_ORDER } from "../constants/categories";
 import type {
   ApiResponse,
@@ -31,8 +32,33 @@ import type {
   Side,
 } from "../types";
 
+function PriceTag({ price, discountPercent }: { price: number; discountPercent: number }) {
+  const discounted = applyDiscount(price, discountPercent);
+  return (
+    <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6, whiteSpace: "nowrap" }}>
+      <span
+        style={{
+          fontSize: 17,
+          fontWeight: 800,
+          color: "var(--primary)",
+          fontFamily: "var(--font-display)",
+          letterSpacing: "-0.02em",
+        }}
+      >
+        &#8358;{discounted.toLocaleString()}
+      </span>
+      {discounted !== price && (
+        <span style={{ fontSize: 12, color: "var(--gray-400)", textDecoration: "line-through" }}>
+          &#8358;{price.toLocaleString()}
+        </span>
+      )}
+    </span>
+  );
+}
+
 interface ItemCardProps {
   item: MenuItem;
+  discountPercent: number;
   index: number;
   totalQty: number;
   simpleLine: CartItem | undefined;
@@ -40,7 +66,7 @@ interface ItemCardProps {
   onUpdate: (lineId: string, qty: number) => void;
 }
 
-function ItemCard({ item, index, totalQty, simpleLine, onAdd, onUpdate }: ItemCardProps) {
+function ItemCard({ item, discountPercent, index, totalQty, simpleLine, onAdd, onUpdate }: ItemCardProps) {
   const available = item.status === "AVAILABLE";
   return (
     <div
@@ -196,17 +222,7 @@ function ItemCard({ item, index, totalQty, simpleLine, onAdd, onUpdate }: ItemCa
             marginTop: "auto",
           }}
         >
-          <span
-            style={{
-              fontSize: 17,
-              fontWeight: 800,
-              color: "var(--primary)",
-              fontFamily: "var(--font-display)",
-              letterSpacing: "-0.02em",
-            }}
-          >
-            &#8358;{Number(item.price).toLocaleString()}
-          </span>
+          <PriceTag price={Number(item.price)} discountPercent={discountPercent} />
           {simpleLine ? (
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <button
@@ -274,12 +290,13 @@ function ItemCard({ item, index, totalQty, simpleLine, onAdd, onUpdate }: ItemCa
 
 interface SidePickerModalProps {
   item: MenuItem;
+  discountPercent: number;
   sides: Side[] | null;
   onClose: () => void;
   onConfirm: (selectedSides: Side[]) => void;
 }
 
-function SidePickerModal({ item, sides, onClose, onConfirm }: SidePickerModalProps) {
+function SidePickerModal({ item, discountPercent, sides, onClose, onConfirm }: SidePickerModalProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const loading = sides === null;
 
@@ -295,7 +312,7 @@ function SidePickerModal({ item, sides, onClose, onConfirm }: SidePickerModalPro
   const sidesTotal = (sides ?? [])
     .filter((s) => selected.has(s.id))
     .reduce((sum, s) => sum + s.price, 0);
-  const total = item.price + sidesTotal;
+  const total = applyDiscount(Number(item.price), discountPercent) + sidesTotal;
 
   return (
     <div
@@ -387,18 +404,7 @@ function SidePickerModal({ item, sides, onClose, onConfirm }: SidePickerModalPro
           <div style={{ padding: "16px 20px 4px" }}>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 4 }}>
               <p style={{ fontWeight: 700, fontSize: 18, margin: 0, lineHeight: 1.3 }}>{item.name}</p>
-              <span
-                style={{
-                  fontSize: 17,
-                  fontWeight: 800,
-                  color: "var(--primary)",
-                  fontFamily: "var(--font-display)",
-                  letterSpacing: "-0.02em",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                &#8358;{item.price.toLocaleString()}
-              </span>
+              <PriceTag price={Number(item.price)} discountPercent={discountPercent} />
             </div>
 
             <p style={{ fontSize: 13, color: "var(--gray-500)", marginTop: 12, marginBottom: 10, fontWeight: 600 }}>
@@ -756,6 +762,7 @@ export default function Menu() {
   );
   const [userName, setUserName] = useState<string>("");
   const [storeHours, setStoreHours] = useState<AppSettings | null>(null);
+  const discountPercent = storeHours?.discountPercent ?? 0;
   const [sidePicker, setSidePicker] = useState<{ item: MenuItem; sides: Side[] | null } | null>(null);
   const activeSidePickerItemId = useRef<string | null>(null);
   const navigate = useNavigate();
@@ -1562,6 +1569,7 @@ export default function Menu() {
               <ItemCard
                 key={item.id}
                 item={item}
+                discountPercent={discountPercent}
                 index={i}
                 totalQty={totalQtyForItem(item.id)}
                 simpleLine={simpleLineForItem(item.id)}
@@ -1591,6 +1599,7 @@ export default function Menu() {
                     <ItemCard
                       key={item.id}
                       item={item}
+                      discountPercent={discountPercent}
                       index={i}
                       totalQty={totalQtyForItem(item.id)}
                       simpleLine={simpleLineForItem(item.id)}
@@ -1668,6 +1677,7 @@ export default function Menu() {
       {sidePicker && (
         <SidePickerModal
           item={sidePicker.item}
+          discountPercent={discountPercent}
           sides={sidePicker.sides}
           onClose={() => { activeSidePickerItemId.current = null; setSidePicker(null); }}
           onConfirm={confirmSidePicker}
